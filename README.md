@@ -7,6 +7,16 @@ normally use Nerd Font glyphs. It uses Kitty Graphics Protocol Unicode
 placeholders, targets Ghostty first, supports Ghostty inside tmux, and falls
 back to glyph icons when image rendering is unavailable.
 
+## Preview
+
+Material Icon Theme:
+
+![real-icons.nvim with Material Icon Theme](media/preview-material.png)
+
+Flow Icons local VS Code theme:
+
+![real-icons.nvim with Flow Icons](media/preview-flow.png)
+
 ## Status
 
 Experimental, usable today on Ghostty. The renderer, Material Icon Theme
