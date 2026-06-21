@@ -71,6 +71,34 @@ function M.clear(bufnr)
   renderer.clear(bufnr or vim.api.nvim_get_current_buf())
 end
 
+local function clear_rendered_icons()
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(bufnr) then
+      renderer.clear(bufnr)
+    end
+  end
+end
+
+local function refresh_known_integrations()
+  local ok_oil, oil = pcall(require, "real-icons.integrations.oil")
+  if ok_oil then
+    for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.api.nvim_buf_is_loaded(bufnr) and vim.bo[bufnr].filetype == "oil" then
+        pcall(oil.refresh, bufnr)
+      end
+    end
+  end
+
+  local ok_lualine, lualine = pcall(require, "lualine")
+  if ok_lualine and type(lualine.refresh) == "function" then
+    pcall(lualine.refresh)
+  end
+
+  vim.cmd("redrawstatus")
+  vim.cmd("redrawtabline")
+  vim.cmd("redraw!")
+end
+
 function M.is_supported()
   ensure_setup()
   return backend.supports_terminal() and vim.o.termguicolors
@@ -95,6 +123,49 @@ function M.capabilities()
     fallback = config.options.fallback.enabled,
     pack = packs.get().name,
   }
+end
+
+function M.pack()
+  ensure_setup()
+  return config.options.pack
+end
+
+function M.available_packs()
+  ensure_setup()
+  return packs.names()
+end
+
+function M.use_pack(name, opts)
+  ensure_setup()
+  opts = opts or {}
+  name = name and vim.trim(name) or ""
+
+  if name == "" then
+    return false, "pack name is required"
+  end
+  if not packs.source(name) then
+    return false, "unknown icon pack: " .. name
+  end
+
+  config.options.pack = name
+  packs.clear_cache()
+  backend.clear_uploaded()
+  clear_rendered_icons()
+  refresh_known_integrations()
+
+  vim.api.nvim_exec_autocmds("User", {
+    pattern = "RealIconsPackChanged",
+    data = {
+      pack = name,
+    },
+  })
+
+  if opts.notify ~= false then
+    local suffix = packs.installed(name) and "" or " (using bundled fallback until installed)"
+    log.info("Using icon pack: " .. name .. suffix)
+  end
+
+  return true
 end
 
 function M.install_pack(name, opts)

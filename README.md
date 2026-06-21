@@ -152,6 +152,36 @@ The plugin stores installed packs under
 `stdpath("cache")/real-icons`. Icon packs keep their upstream licenses and are
 not vendored into this repository.
 
+### Switching Packs At Runtime
+
+Switch the active pack without restarting Neovim:
+
+```vim
+:RealIconsUsePack material
+:RealIconsUsePack builtin
+```
+
+List configured packs:
+
+```vim
+:RealIconsPacks
+```
+
+From Lua:
+
+```lua
+require("real-icons").use_pack("material")
+```
+
+The command clears uploaded terminal image ids, clears existing real-icons
+extmarks, redraws statusline and tabline UI, and emits:
+
+```lua
+User RealIconsPackChanged
+```
+
+Use that event if a custom integration needs to rebuild its own cached entries.
+
 ### Local VS Code Icon Themes
 
 Any local VS Code icon theme can be used as a pack. This is useful for private
@@ -457,6 +487,16 @@ end
 vim.print(icons.capabilities())
 ```
 
+Switch icon packs:
+
+```lua
+local icons = require("real-icons")
+
+icons.use_pack("material")
+print(icons.pack())
+vim.print(icons.available_packs())
+```
+
 For text-based plugin hooks such as pickers, statuslines, and tablines, use the
 placeholder segment directly:
 
@@ -477,6 +517,8 @@ return segment.text, segment.hl
 | `:RealIconsInstallPack material` | Install Material Icon Theme. |
 | `:RealIconsBuildCache` | Build the PNG cache for the active pack. |
 | `:RealIconsClearCache [name]` | Clear generated PNG cache. |
+| `:RealIconsUsePack [name]` | Switch the active icon pack, or show the current pack. |
+| `:RealIconsPacks` | List configured icon packs. |
 | `:RealIconsOilEnable` | Attach the Oil integration to the current buffer. |
 
 ## Troubleshooting
@@ -525,6 +567,16 @@ positions instead of absolute pixel placement.
   available.
 - Integrations are plugin-specific because each UI exposes different icon hooks.
 - Public APIs may change before v1.0.
+
+## Acknowledgements
+
+`real-icons.nvim` stands on a few core projects:
+
+- Neovim, which makes this kind of terminal UI experimentation possible.
+- Kitty Graphics Protocol, which enables real image rendering in modern
+  terminals.
+- Ghostty, the first terminal target for this plugin.
+- Material Icon Theme, the default open source icon pack target.
 
 ## License
 

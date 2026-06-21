@@ -122,6 +122,28 @@ Install the default Material Icon Theme pack:
 The plugin stores installed packs under stdpath("data")/real-icons/packs and
 generated PNG files under stdpath("cache")/real-icons.
 
+Switch packs at runtime:
+>
+  :RealIconsUsePack material
+  :RealIconsUsePack builtin
+<
+
+List configured packs:
+>
+  :RealIconsPacks
+<
+
+Lua API:
+>
+  require("real-icons").use_pack("material")
+<
+
+Switching packs clears uploaded terminal image ids, clears existing real-icons
+extmarks, redraws statusline and tabline UI, and emits:
+>
+  User RealIconsPackChanged
+<
+
 Custom VS Code icon theme:
 >
   require("real-icons").setup({
@@ -339,6 +361,14 @@ Check capabilities:
   vim.print(icons.capabilities())
 <
 
+Switch icon packs:
+>
+  local icons = require("real-icons")
+  icons.use_pack("material")
+  print(icons.pack())
+  vim.print(icons.available_packs())
+<
+
 For text-based hooks, use the placeholder segment:
 >
   local renderer = require("real-icons.render.placeholder")
@@ -364,6 +394,12 @@ COMMANDS                                                  *real-icons-commands*
 
 :RealIconsClearCache [name]
   Clear generated PNG cache.
+
+:RealIconsUsePack [name]
+  Switch the active icon pack, or show the current pack.
+
+:RealIconsPacks
+  List configured icon packs.
 
 :RealIconsOilEnable
   Attach the Oil integration to the current buffer.

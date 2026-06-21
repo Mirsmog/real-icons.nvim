@@ -80,7 +80,7 @@ function M.component(opts)
     filetype = opts.filetype or vim.bo.filetype,
     is_dir = opts.is_dir or vim.fn.isdirectory(path) == 1,
   })
-  local segment = renderer.segment(icon)
+  local segment = renderer.segment(icon, opts)
   return statusline_hl(segment.hl) .. segment.text .. "%*"
 end
 

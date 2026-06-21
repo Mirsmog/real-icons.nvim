@@ -29,11 +29,22 @@ local function diacritic(n)
   return diacritics[n]
 end
 
-local function hl_for_image(image_id)
-  local name = string.format("RealIconsImage%06x", image_id)
-  vim.api.nvim_set_hl(0, name, {
+local function hl_for_image(image_id, opts)
+  opts = opts or {}
+  local background = opts.background or opts.bg
+  local suffix = ""
+  if type(background) == "string" and background ~= "" then
+    suffix = background:gsub("[^%w]", "")
+  end
+
+  local name = string.format("RealIconsImage%06x%s", image_id, suffix)
+  local hl = {
     fg = string.format("#%06x", image_id % 0x1000000),
-  })
+  }
+  if background ~= nil then
+    hl.bg = background
+  end
+  vim.api.nvim_set_hl(0, name, hl)
   return name
 end
 
@@ -110,7 +121,7 @@ function M.segment(icon, opts)
       if image_id then
         return {
           text = M.placeholder(cols, rows)[1],
-          hl = hl_for_image(image_id),
+          hl = hl_for_image(image_id, opts),
           width = cols,
         }
       end

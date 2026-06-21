@@ -87,6 +87,28 @@ function M.source(name)
   return spec_for(name)
 end
 
+function M.names()
+  local names = {
+    "builtin",
+    "material",
+  }
+
+  local seen = {
+    builtin = true,
+    material = true,
+  }
+
+  for name in pairs(config.options.packs or {}) do
+    if not seen[name] then
+      names[#names + 1] = name
+      seen[name] = true
+    end
+  end
+
+  table.sort(names)
+  return names
+end
+
 local function run(command)
   local output = vim.fn.system(command)
   if vim.v.shell_error ~= 0 then
