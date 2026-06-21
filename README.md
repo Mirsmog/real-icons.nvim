@@ -40,6 +40,7 @@ With lazy.nvim:
     pack = "material",
     integrations = {
       fzf_lua = false,
+      mini_files = false,
       neo_tree = false,
       nvim_tree = false,
       telescope = true,
@@ -121,6 +122,7 @@ require("real-icons").setup({
   },
   integrations = {
     fzf_lua = false,
+    mini_files = false,
     neo_tree = false,
     nvim_tree = false,
     telescope = true,
@@ -257,6 +259,27 @@ require("neo-tree").setup(require("real-icons.integrations.neo_tree").opts())
 The adapter uses `default_component_configs.icon.provider`, so normal neo-tree
 renderers, git status, diagnostics, modified markers, and selection markers stay
 in neo-tree.
+
+## mini.files
+
+Manual setup:
+
+```lua
+require("mini.files").setup(require("real-icons.integrations.mini_files").opts())
+```
+
+Automatic setup can be enabled before `mini.files.setup()`:
+
+```lua
+require("real-icons").setup({
+  integrations = {
+    mini_files = true,
+  },
+})
+```
+
+The adapter uses `content.prefix`, which is the official `mini.files` hook for
+text shown before entry names.
 
 ## nvim-tree.lua
 
