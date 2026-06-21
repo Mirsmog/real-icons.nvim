@@ -17,6 +17,7 @@ M.defaults = {
     provider = "auto",
   },
   integrations = {
+    fzf_lua = false,
     oil = false,
     telescope = false,
     telescope_file_browser = false,

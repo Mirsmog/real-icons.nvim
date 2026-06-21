@@ -28,6 +28,7 @@ Example lazy.nvim spec:
     opts = {
       pack = "material",
       integrations = {
+        fzf_lua = false,
         telescope = true,
         telescope_file_browser = true,
       },
@@ -76,12 +77,22 @@ Full setup:
       provider = "auto",
     },
     integrations = {
+      fzf_lua = false,
       telescope = false,
       telescope_file_browser = false,
       oil = false,
     },
   })
 <
+
+For fzf-lua:
+>
+  require("fzf-lua").setup(require("real-icons.integrations.fzf_lua").opts())
+<
+
+This covers files, oldfiles, history, git files, git diff, args, and
+complete_file. The adapter keeps fzf-lua path parsing intact by writing the
+real icon before fzf-lua's metadata delimiter.
 
 Icon sharpness:
 >

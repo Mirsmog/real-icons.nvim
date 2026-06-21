@@ -39,6 +39,7 @@ With lazy.nvim:
   opts = {
     pack = "material",
     integrations = {
+      fzf_lua = false,
       telescope = true,
       telescope_file_browser = true,
       oil = false,
@@ -117,6 +118,7 @@ require("real-icons").setup({
     provider = "auto",
   },
   integrations = {
+    fzf_lua = false,
     telescope = true,
     telescope_file_browser = true,
     oil = false,
@@ -203,6 +205,31 @@ require("telescope").setup({
   },
 })
 ```
+
+## fzf-lua
+
+`fzf-lua` renders entries inside an fzf terminal, so the integration uses ANSI
+foreground colors for Kitty placeholders and keeps fzf-lua's file parser
+compatible by putting the icon before its metadata delimiter.
+
+Automatic setup:
+
+```lua
+require("real-icons").setup({
+  integrations = {
+    fzf_lua = true,
+  },
+})
+```
+
+Manual setup, useful when you already own the `fzf-lua` config:
+
+```lua
+require("fzf-lua").setup(require("real-icons.integrations.fzf_lua").opts())
+```
+
+The first adapter covers `files`, `oldfiles`, `history`, `git_files`,
+`git_diff`, `args`, and `complete_file`.
 
 ## Integrating A File Explorer
 

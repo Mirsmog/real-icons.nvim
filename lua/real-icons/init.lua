@@ -24,6 +24,9 @@ function M.setup(opts)
   if config.options.integrations.telescope_file_browser then
     require("real-icons.integrations.telescope_file_browser").setup()
   end
+  if config.options.integrations.fzf_lua then
+    require("real-icons.integrations.fzf_lua").setup()
+  end
 end
 
 local function ensure_setup()
