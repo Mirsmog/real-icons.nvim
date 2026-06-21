@@ -4,18 +4,45 @@
 CONTENTS                                                    *real-icons-contents*
 
 1. Introduction                                      |real-icons-introduction|
-2. Setup                                                   |real-icons-setup|
-3. Commands                                             |real-icons-commands|
-4. API                                                       |real-icons-api|
-5. Requirements                                   |real-icons-requirements|
+2. Requirements                                      |real-icons-requirements|
+3. Setup                                                   |real-icons-setup|
+4. Icon packs                                         |real-icons-packs|
+5. Integrations                                |real-icons-integrations|
+6. API                                                       |real-icons-api|
+7. Commands                                             |real-icons-commands|
+8. Troubleshooting                              |real-icons-troubleshooting|
 
 ==============================================================================
 INTRODUCTION                                          *real-icons-introduction*
 
 real-icons.nvim renders file and folder icons as real terminal images. It uses
-Kitty Graphics Protocol Unicode placeholders, with Ghostty as the first target.
-When image rendering is unavailable, integrations can fall back to glyph icon
-providers such as mini.icons or nvim-web-devicons.
+Kitty Graphics Protocol Unicode placeholders, with Ghostty as the primary
+target. When image rendering is unavailable, integrations can fall back to glyph
+icon providers such as mini.icons or nvim-web-devicons.
+
+The project is experimental and usable today on Ghostty. Public APIs may change
+before v1.0.
+
+It provides real image icons in terminal UI rows, SVG icon pack rasterization,
+VS Code icon theme support, custom local packs, and opt-in integrations for
+popular Neovim UI plugins.
+
+==============================================================================
+REQUIREMENTS                                          *real-icons-requirements*
+
+- Neovim 0.10+
+- Ghostty
+- termguicolors
+- ImageMagick for SVG icon packs
+- curl and tar for pack installation
+
+tmux requires passthrough and RGB color support:
+>
+  set -g default-terminal "tmux-256color"
+  set -gq terminal-overrides[1] "*:Tc"
+  set -gq terminal-features[3] "xterm-ghostty:RGB"
+  set -g allow-passthrough on
+<
 
 ==============================================================================
 SETUP                                                        *real-icons-setup*
@@ -23,54 +50,24 @@ SETUP                                                        *real-icons-setup*
 Example lazy.nvim spec:
 >
   {
-    "real-icons/real-icons.nvim",
+    "Mirsmog/real-icons.nvim",
     build = ":RealIconsInstallPack material",
     opts = {
       pack = "material",
       integrations = {
-        bufferline = false,
-        fzf_lua = false,
-        lualine = false,
-        mini_files = false,
-        neo_tree = false,
-        nvim_tree = false,
-        snacks_picker = false,
         telescope = true,
-        telescope_file_browser = true,
       },
     },
   }
 <
 
-For Telescope core file pickers:
->
-  require("real-icons").setup({
-    integrations = {
-      telescope = true,
-    },
-  })
-<
-
-This affects Telescope file pickers that use telescope.make_entry.gen_from_file,
-including oldfiles, find_files, and git_files.
-
-For telescope-file-browser.nvim:
->
-  require("telescope").setup({
-    extensions = {
-      file_browser = {
-        disable_devicons = true,
-        entry_maker = require("real-icons.integrations.telescope_file_browser").entry_maker,
-      },
-    },
-  })
-  require("telescope").load_extension("file_browser")
-<
-
-Full setup:
+Full configuration:
 >
   require("real-icons").setup({
     pack = "material",
+    packs = {},
+    overrides = {},
+    backend = "ghostty",
     size = {
       cols = 2,
       rows = 1,
@@ -89,85 +86,13 @@ Full setup:
       mini_files = false,
       neo_tree = false,
       nvim_tree = false,
+      oil = false,
       snacks_picker = false,
       telescope = false,
       telescope_file_browser = false,
-      oil = false,
     },
   })
 <
-
-For fzf-lua:
->
-  require("fzf-lua").setup(require("real-icons.integrations.fzf_lua").opts())
-<
-
-This covers files, oldfiles, history, git files, git diff, args, and
-complete_file. The adapter keeps fzf-lua path parsing intact by writing the
-real icon before fzf-lua's metadata delimiter.
-
-For bufferline.nvim:
->
-  require("bufferline").setup(require("real-icons.integrations.bufferline").opts())
-<
-
-The adapter uses bufferline's get_element_icon option.
-
-For lualine.nvim:
->
-  require("lualine").setup({
-    sections = {
-      lualine_c = {
-        require("real-icons.integrations.lualine").component,
-        "filename",
-      },
-    },
-  })
-<
-
-Automatic setup can also insert the component before filename or filetype
-components.
-
-For neo-tree.nvim:
->
-  require("neo-tree").setup(require("real-icons.integrations.neo_tree").opts())
-<
-
-The adapter uses default_component_configs.icon.provider, so renderers, git
-status, diagnostics, modified markers, and selection markers stay in neo-tree.
-
-For mini.files:
->
-  require("mini.files").setup(require("real-icons.integrations.mini_files").opts())
-<
-
-The adapter uses content.prefix, which is the official mini.files hook for text
-shown before entry names.
-
-For snacks.picker:
->
-  require("real-icons").setup({
-    integrations = {
-      snacks_picker = true,
-    },
-  })
-<
-
-The adapter patches snacks.picker.format.filename and leaves the rest of Snacks
-picker formatting intact.
-
-For nvim-tree.lua:
->
-  require("real-icons").setup({
-    integrations = {
-      nvim_tree = true,
-    },
-  })
-<
-
-The adapter only replaces the file or folder icon segment. Git, diagnostics,
-opened, hidden, modified, bookmark, and clipboard decorators remain owned by
-nvim-tree.
 
 Icon sharpness:
 >
@@ -182,9 +107,20 @@ Icon sharpness:
   })
 <
 
-The plugin keeps SVG icons as sources and rasterizes them into a high-density
-PNG cache. If an icon pack has too much transparent padding, set trim = true and
-increase padding if needed.
+cols and rows reserve terminal cells. pixels controls the generated PNG size.
+If a pack has too much transparent padding, set trim = true. If icons look too
+large after trimming, add padding.
+
+==============================================================================
+ICON PACKS                                                  *real-icons-packs*
+
+Install the default Material Icon Theme pack:
+>
+  :RealIconsInstallPack material
+<
+
+The plugin stores installed packs under stdpath("data")/real-icons/packs and
+generated PNG files under stdpath("cache")/real-icons.
 
 Custom VS Code icon theme:
 >
@@ -244,6 +180,174 @@ Overrides:
 <
 
 ==============================================================================
+INTEGRATIONS                                        *real-icons-integrations*
+
+All integrations are opt-in.
+
+Telescope core file pickers:
+>
+  require("real-icons").setup({
+    integrations = {
+      telescope = true,
+    },
+  })
+<
+
+This affects Telescope file pickers that use telescope.make_entry.gen_from_file,
+including oldfiles, find_files, and git_files.
+
+telescope-file-browser.nvim:
+>
+  require("telescope").setup({
+    extensions = {
+      file_browser = {
+        disable_devicons = true,
+        entry_maker = require("real-icons.integrations.telescope_file_browser").entry_maker,
+      },
+    },
+  })
+  require("telescope").load_extension("file_browser")
+<
+
+fzf-lua:
+>
+  require("real-icons").setup({
+    integrations = {
+      fzf_lua = true,
+    },
+  })
+<
+
+Manual fzf-lua setup:
+>
+  require("fzf-lua").setup(require("real-icons.integrations.fzf_lua").opts())
+<
+
+oil.nvim:
+>
+  require("real-icons").setup({
+    integrations = {
+      oil = true,
+    },
+  })
+<
+
+nvim-tree.lua:
+>
+  require("real-icons").setup({
+    integrations = {
+      nvim_tree = true,
+    },
+  })
+<
+
+neo-tree.nvim:
+>
+  require("real-icons").setup({
+    integrations = {
+      neo_tree = true,
+    },
+  })
+<
+
+Manual neo-tree setup:
+>
+  require("neo-tree").setup(require("real-icons.integrations.neo_tree").opts())
+<
+
+mini.files:
+>
+  require("real-icons").setup({
+    integrations = {
+      mini_files = true,
+    },
+  })
+<
+
+Manual mini.files setup:
+>
+  require("mini.files").setup(require("real-icons.integrations.mini_files").opts())
+<
+
+bufferline.nvim:
+>
+  require("real-icons").setup({
+    integrations = {
+      bufferline = true,
+    },
+  })
+<
+
+Manual bufferline setup:
+>
+  require("bufferline").setup(require("real-icons.integrations.bufferline").opts())
+<
+
+lualine.nvim:
+>
+  require("real-icons").setup({
+    integrations = {
+      lualine = true,
+    },
+  })
+<
+
+Manual lualine component:
+>
+  require("lualine").setup({
+    sections = {
+      lualine_c = {
+        require("real-icons.integrations.lualine").component,
+        "filename",
+      },
+    },
+  })
+<
+
+snacks.picker:
+>
+  require("real-icons").setup({
+    integrations = {
+      snacks_picker = true,
+    },
+  })
+<
+
+==============================================================================
+API                                                            *real-icons-api*
+
+Resolve an icon:
+>
+  local icons = require("real-icons")
+  local icon = icons.get(path, {
+    is_dir = false,
+    filetype = "lua",
+  })
+<
+
+Render an icon into a buffer-based UI:
+>
+  icons.render(bufnr, row, col, icon)
+<
+
+Check capabilities:
+>
+  local icons = require("real-icons")
+  if icons.is_supported() then
+    print(icons.backend())
+  end
+  vim.print(icons.capabilities())
+<
+
+For text-based hooks, use the placeholder segment:
+>
+  local renderer = require("real-icons.render.placeholder")
+  local icon = require("real-icons").get(path, { is_dir = false })
+  local segment = renderer.segment(icon)
+  return segment.text, segment.hl
+<
+
+==============================================================================
 COMMANDS                                                  *real-icons-commands*
 
 :RealIconsHealth
@@ -256,41 +360,31 @@ COMMANDS                                                  *real-icons-commands*
   Install an icon pack. Currently supported: material.
 
 :RealIconsBuildCache
-  Convert all icons in the active pack to cached PNG files.
+  Convert icons in the active pack to cached PNG files.
 
 :RealIconsClearCache [name]
   Clear generated PNG cache.
 
-==============================================================================
-API                                                            *real-icons-api*
-
-Resolve and render an icon:
->
-  local icons = require("real-icons")
-  local icon = icons.get(path, { is_dir = false })
-  icons.render(bufnr, row, col, icon)
-<
-
-Check capabilities:
->
-  local icons = require("real-icons")
-  if icons.is_supported() then
-    print(icons.backend())
-  end
-<
+:RealIconsOilEnable
+  Attach the Oil integration to the current buffer.
 
 ==============================================================================
-REQUIREMENTS                                          *real-icons-requirements*
+TROUBLESHOOTING                                    *real-icons-troubleshooting*
 
-- Neovim 0.10+
-- Ghostty
-- termguicolors
-- ImageMagick for SVG icon packs
-- curl and tar for pack installation
+Run :RealIconsHealth first. It checks terminal support, termguicolors,
+ImageMagick, tmux passthrough, and the active icon pack.
 
-tmux requires passthrough:
->
-  set -g allow-passthrough on
-<
+If icons do not appear:
+- Confirm you are running inside Ghostty.
+- Confirm termguicolors is enabled.
+- Install the default pack with :RealIconsInstallPack material.
+- Run :RealIconsDemo outside tmux, then inside tmux.
+- In tmux, confirm set -g allow-passthrough on is loaded.
+
+If icons are blurry:
+- Keep SVG packs as sources when possible.
+- Increase size.pixels.
+- Use cols = 2 for one-row icons.
+- Clear the cache after changing size options.
 
 vim:tw=78:ts=8:noet:ft=help:norl:

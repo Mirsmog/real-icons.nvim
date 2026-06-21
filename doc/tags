@@ -1,7 +1,10 @@
 real-icons-api	real-icons.txt	/*real-icons-api*
 real-icons-commands	real-icons.txt	/*real-icons-commands*
 real-icons-contents	real-icons.txt	/*real-icons-contents*
+real-icons-integrations	real-icons.txt	/*real-icons-integrations*
 real-icons-introduction	real-icons.txt	/*real-icons-introduction*
+real-icons-packs	real-icons.txt	/*real-icons-packs*
 real-icons-requirements	real-icons.txt	/*real-icons-requirements*
 real-icons-setup	real-icons.txt	/*real-icons-setup*
+real-icons-troubleshooting	real-icons.txt	/*real-icons-troubleshooting*
 real-icons.nvim	real-icons.txt	/*real-icons.nvim*
