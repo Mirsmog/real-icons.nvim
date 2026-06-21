@@ -1,0 +1,210 @@
+*real-icons.nvim* Graphical file icons for Neovim
+
+==============================================================================
+CONTENTS                                                    *real-icons-contents*
+
+1. Introduction                                      |real-icons-introduction|
+2. Setup                                                   |real-icons-setup|
+3. Commands                                             |real-icons-commands|
+4. API                                                       |real-icons-api|
+5. Requirements                                   |real-icons-requirements|
+
+==============================================================================
+INTRODUCTION                                          *real-icons-introduction*
+
+real-icons.nvim renders file and folder icons as real terminal images. It uses
+Kitty Graphics Protocol Unicode placeholders, with Ghostty as the first target.
+When image rendering is unavailable, integrations can fall back to glyph icon
+providers such as mini.icons or nvim-web-devicons.
+
+==============================================================================
+SETUP                                                        *real-icons-setup*
+
+Example lazy.nvim spec:
+>
+  {
+    "real-icons/real-icons.nvim",
+    build = ":RealIconsInstallPack material",
+    opts = {
+      pack = "material",
+      integrations = {
+        telescope = true,
+        telescope_file_browser = true,
+      },
+    },
+  }
+<
+
+For Telescope core file pickers:
+>
+  require("real-icons").setup({
+    integrations = {
+      telescope = true,
+    },
+  })
+<
+
+This affects Telescope file pickers that use telescope.make_entry.gen_from_file,
+including oldfiles, find_files, and git_files.
+
+For telescope-file-browser.nvim:
+>
+  require("telescope").setup({
+    extensions = {
+      file_browser = {
+        disable_devicons = true,
+        entry_maker = require("real-icons.integrations.telescope_file_browser").entry_maker,
+      },
+    },
+  })
+  require("telescope").load_extension("file_browser")
+<
+
+Full setup:
+>
+  require("real-icons").setup({
+    pack = "material",
+    size = {
+      cols = 2,
+      rows = 1,
+      pixels = 64,
+      padding = 0,
+      trim = false,
+    },
+    fallback = {
+      enabled = true,
+      provider = "auto",
+    },
+    integrations = {
+      telescope = false,
+      telescope_file_browser = false,
+      oil = false,
+    },
+  })
+<
+
+Icon sharpness:
+>
+  require("real-icons").setup({
+    size = {
+      cols = 2,
+      rows = 1,
+      pixels = 64,
+      padding = 0,
+      trim = false,
+    },
+  })
+<
+
+The plugin keeps SVG icons as sources and rasterizes them into a high-density
+PNG cache. If an icon pack has too much transparent padding, set trim = true and
+increase padding if needed.
+
+Custom VS Code icon theme:
+>
+  require("real-icons").setup({
+    pack = "flow",
+    packs = {
+      flow = {
+        type = "vscode",
+        path = vim.fn.expand("~/.vscode-oss/extensions/thang-nm.flow-icons-2.0.3"),
+        theme = "flow-deep",
+        license = "personal",
+      },
+    },
+  })
+<
+
+Simple local icon folder:
+>
+  require("real-icons").setup({
+    pack = "my-icons",
+    packs = {
+      ["my-icons"] = {
+        type = "simple",
+        path = "~/icons",
+        file = "file.svg",
+        folder = "folder.svg",
+        extensions = {
+          lua = "lua.svg",
+          ts = "typescript.svg",
+        },
+        filenames = {
+          ["package.json"] = "nodejs.svg",
+        },
+        folders = {
+          src = "folder-src.svg",
+        },
+      },
+    },
+  })
+<
+
+Overrides:
+>
+  require("real-icons").setup({
+    overrides = {
+      extensions = {
+        lua = "~/icons/custom-lua.svg",
+      },
+      filenames = {
+        [".env"] = "~/icons/env.svg",
+      },
+      folders = {
+        node_modules = "~/icons/node_modules.svg",
+      },
+    },
+  })
+<
+
+==============================================================================
+COMMANDS                                                  *real-icons-commands*
+
+:RealIconsHealth
+  Run health checks.
+
+:RealIconsDemo
+  Open a demo buffer.
+
+:RealIconsInstallPack {name}
+  Install an icon pack. Currently supported: material.
+
+:RealIconsBuildCache
+  Convert all icons in the active pack to cached PNG files.
+
+:RealIconsClearCache [name]
+  Clear generated PNG cache.
+
+==============================================================================
+API                                                            *real-icons-api*
+
+Resolve and render an icon:
+>
+  local icons = require("real-icons")
+  local icon = icons.get(path, { is_dir = false })
+  icons.render(bufnr, row, col, icon)
+<
+
+Check capabilities:
+>
+  local icons = require("real-icons")
+  if icons.is_supported() then
+    print(icons.backend())
+  end
+<
+
+==============================================================================
+REQUIREMENTS                                          *real-icons-requirements*
+
+- Neovim 0.10+
+- Ghostty
+- termguicolors
+- ImageMagick for SVG icon packs
+- curl and tar for pack installation
+
+tmux requires passthrough:
+>
+  set -g allow-passthrough on
+<
+
+vim:tw=78:ts=8:noet:ft=help:norl:
