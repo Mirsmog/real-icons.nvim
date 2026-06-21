@@ -18,6 +18,12 @@ function M.setup(opts)
   if config.options.integrations.oil then
     require("real-icons.integrations.oil").setup()
   end
+  if config.options.integrations.bufferline then
+    require("real-icons.integrations.bufferline").setup()
+  end
+  if config.options.integrations.lualine then
+    require("real-icons.integrations.lualine").setup()
+  end
   if config.options.integrations.telescope then
     require("real-icons.integrations.telescope").setup()
   end
@@ -35,6 +41,9 @@ function M.setup(opts)
   end
   if config.options.integrations.nvim_tree then
     require("real-icons.integrations.nvim_tree").setup()
+  end
+  if config.options.integrations.snacks_picker then
+    require("real-icons.integrations.snacks_picker").setup()
   end
 end
 

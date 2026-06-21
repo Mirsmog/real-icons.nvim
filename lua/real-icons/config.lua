@@ -18,10 +18,13 @@ M.defaults = {
   },
   integrations = {
     fzf_lua = false,
+    bufferline = false,
+    lualine = false,
     mini_files = false,
     neo_tree = false,
     nvim_tree = false,
     oil = false,
+    snacks_picker = false,
     telescope = false,
     telescope_file_browser = false,
   },

@@ -28,10 +28,13 @@ Example lazy.nvim spec:
     opts = {
       pack = "material",
       integrations = {
+        bufferline = false,
         fzf_lua = false,
+        lualine = false,
         mini_files = false,
         neo_tree = false,
         nvim_tree = false,
+        snacks_picker = false,
         telescope = true,
         telescope_file_browser = true,
       },
@@ -80,10 +83,13 @@ Full setup:
       provider = "auto",
     },
     integrations = {
+      bufferline = false,
       fzf_lua = false,
+      lualine = false,
       mini_files = false,
       neo_tree = false,
       nvim_tree = false,
+      snacks_picker = false,
       telescope = false,
       telescope_file_browser = false,
       oil = false,
@@ -100,6 +106,28 @@ This covers files, oldfiles, history, git files, git diff, args, and
 complete_file. The adapter keeps fzf-lua path parsing intact by writing the
 real icon before fzf-lua's metadata delimiter.
 
+For bufferline.nvim:
+>
+  require("bufferline").setup(require("real-icons.integrations.bufferline").opts())
+<
+
+The adapter uses bufferline's get_element_icon option.
+
+For lualine.nvim:
+>
+  require("lualine").setup({
+    sections = {
+      lualine_c = {
+        require("real-icons.integrations.lualine").component,
+        "filename",
+      },
+    },
+  })
+<
+
+Automatic setup can also insert the component before filename or filetype
+components.
+
 For neo-tree.nvim:
 >
   require("neo-tree").setup(require("real-icons.integrations.neo_tree").opts())
@@ -115,6 +143,18 @@ For mini.files:
 
 The adapter uses content.prefix, which is the official mini.files hook for text
 shown before entry names.
+
+For snacks.picker:
+>
+  require("real-icons").setup({
+    integrations = {
+      snacks_picker = true,
+    },
+  })
+<
+
+The adapter patches snacks.picker.format.filename and leaves the rest of Snacks
+picker formatting intact.
 
 For nvim-tree.lua:
 >

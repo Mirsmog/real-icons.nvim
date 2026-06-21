@@ -39,10 +39,13 @@ With lazy.nvim:
   opts = {
     pack = "material",
     integrations = {
+      bufferline = false,
       fzf_lua = false,
+      lualine = false,
       mini_files = false,
       neo_tree = false,
       nvim_tree = false,
+      snacks_picker = false,
       telescope = true,
       telescope_file_browser = true,
       oil = false,
@@ -121,10 +124,13 @@ require("real-icons").setup({
     provider = "auto",
   },
   integrations = {
+    bufferline = false,
     fzf_lua = false,
+    lualine = false,
     mini_files = false,
     neo_tree = false,
     nvim_tree = false,
+    snacks_picker = false,
     telescope = true,
     telescope_file_browser = true,
     oil = false,
@@ -237,6 +243,50 @@ require("fzf-lua").setup(require("real-icons.integrations.fzf_lua").opts())
 The first adapter covers `files`, `oldfiles`, `history`, `git_files`,
 `git_diff`, `args`, and `complete_file`.
 
+## bufferline.nvim
+
+Automatic setup wraps `bufferline.setup()` and injects `get_element_icon`:
+
+```lua
+require("real-icons").setup({
+  integrations = {
+    bufferline = true,
+  },
+})
+```
+
+Manual setup:
+
+```lua
+require("bufferline").setup(require("real-icons.integrations.bufferline").opts())
+```
+
+## lualine.nvim
+
+Automatic setup wraps `lualine.setup()` and inserts a real icon component before
+`filename` or `filetype` components:
+
+```lua
+require("real-icons").setup({
+  integrations = {
+    lualine = true,
+  },
+})
+```
+
+Manual component usage:
+
+```lua
+require("lualine").setup({
+  sections = {
+    lualine_c = {
+      require("real-icons.integrations.lualine").component,
+      "filename",
+    },
+  },
+})
+```
+
 ## neo-tree.nvim
 
 Automatic setup patches `neo-tree`'s default icon provider before its config is
@@ -280,6 +330,22 @@ require("real-icons").setup({
 
 The adapter uses `content.prefix`, which is the official `mini.files` hook for
 text shown before entry names.
+
+## snacks.picker
+
+Automatic setup patches `snacks.picker.format.filename` and leaves the rest of
+Snacks picker formatting intact:
+
+```lua
+require("real-icons").setup({
+  integrations = {
+    snacks_picker = true,
+  },
+})
+```
+
+This covers file-like picker entries that use Snacks' built-in filename
+formatter, including files, recent files, buffers, git status, and diagnostics.
 
 ## nvim-tree.lua
 
