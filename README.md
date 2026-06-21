@@ -40,6 +40,7 @@ With lazy.nvim:
     pack = "material",
     integrations = {
       fzf_lua = false,
+      nvim_tree = false,
       telescope = true,
       telescope_file_browser = true,
       oil = false,
@@ -119,6 +120,7 @@ require("real-icons").setup({
   },
   integrations = {
     fzf_lua = false,
+    nvim_tree = false,
     telescope = true,
     telescope_file_browser = true,
     oil = false,
@@ -230,6 +232,22 @@ require("fzf-lua").setup(require("real-icons.integrations.fzf_lua").opts())
 
 The first adapter covers `files`, `oldfiles`, `history`, `git_files`,
 `git_diff`, `args`, and `complete_file`.
+
+## nvim-tree.lua
+
+Enable the adapter before or during `nvim-tree.lua` setup:
+
+```lua
+require("real-icons").setup({
+  integrations = {
+    nvim_tree = true,
+  },
+})
+```
+
+The adapter patches `nvim-tree`'s renderer builder and only replaces the file
+or folder icon segment. Git, diagnostics, opened, hidden, modified, bookmark,
+and clipboard decorators remain owned by `nvim-tree`.
 
 ## Integrating A File Explorer
 

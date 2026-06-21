@@ -18,6 +18,7 @@ M.defaults = {
   },
   integrations = {
     fzf_lua = false,
+    nvim_tree = false,
     oil = false,
     telescope = false,
     telescope_file_browser = false,
