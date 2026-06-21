@@ -18,6 +18,7 @@ M.defaults = {
   },
   integrations = {
     fzf_lua = false,
+    neo_tree = false,
     nvim_tree = false,
     oil = false,
     telescope = false,

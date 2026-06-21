@@ -29,6 +29,7 @@ Example lazy.nvim spec:
       pack = "material",
       integrations = {
         fzf_lua = false,
+        neo_tree = false,
         nvim_tree = false,
         telescope = true,
         telescope_file_browser = true,
@@ -79,6 +80,7 @@ Full setup:
     },
     integrations = {
       fzf_lua = false,
+      neo_tree = false,
       nvim_tree = false,
       telescope = false,
       telescope_file_browser = false,
@@ -95,6 +97,14 @@ For fzf-lua:
 This covers files, oldfiles, history, git files, git diff, args, and
 complete_file. The adapter keeps fzf-lua path parsing intact by writing the
 real icon before fzf-lua's metadata delimiter.
+
+For neo-tree.nvim:
+>
+  require("neo-tree").setup(require("real-icons.integrations.neo_tree").opts())
+<
+
+The adapter uses default_component_configs.icon.provider, so renderers, git
+status, diagnostics, modified markers, and selection markers stay in neo-tree.
 
 For nvim-tree.lua:
 >

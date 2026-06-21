@@ -40,6 +40,7 @@ With lazy.nvim:
     pack = "material",
     integrations = {
       fzf_lua = false,
+      neo_tree = false,
       nvim_tree = false,
       telescope = true,
       telescope_file_browser = true,
@@ -120,6 +121,7 @@ require("real-icons").setup({
   },
   integrations = {
     fzf_lua = false,
+    neo_tree = false,
     nvim_tree = false,
     telescope = true,
     telescope_file_browser = true,
@@ -232,6 +234,29 @@ require("fzf-lua").setup(require("real-icons.integrations.fzf_lua").opts())
 
 The first adapter covers `files`, `oldfiles`, `history`, `git_files`,
 `git_diff`, `args`, and `complete_file`.
+
+## neo-tree.nvim
+
+Automatic setup patches `neo-tree`'s default icon provider before its config is
+merged:
+
+```lua
+require("real-icons").setup({
+  integrations = {
+    neo_tree = true,
+  },
+})
+```
+
+Manual setup, useful when you already own the `neo-tree` config:
+
+```lua
+require("neo-tree").setup(require("real-icons.integrations.neo_tree").opts())
+```
+
+The adapter uses `default_component_configs.icon.provider`, so normal neo-tree
+renderers, git status, diagnostics, modified markers, and selection markers stay
+in neo-tree.
 
 ## nvim-tree.lua
 

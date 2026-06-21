@@ -27,6 +27,9 @@ function M.setup(opts)
   if config.options.integrations.fzf_lua then
     require("real-icons.integrations.fzf_lua").setup()
   end
+  if config.options.integrations.neo_tree then
+    require("real-icons.integrations.neo_tree").setup()
+  end
   if config.options.integrations.nvim_tree then
     require("real-icons.integrations.nvim_tree").setup()
   end
