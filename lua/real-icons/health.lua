@@ -6,6 +6,25 @@ local packs = require("real-icons.packs")
 
 local M = {}
 
+local integrations = {
+  { "bufferline", { "bufferline" } },
+  { "fzf_lua", { "fzf-lua" } },
+  { "lualine", { "lualine" } },
+  { "mini_files", { "mini.files" } },
+  { "neo_tree", { "neo-tree.defaults" } },
+  { "nvim_tree", { "nvim-tree.renderer.builder" } },
+  { "oil", { "oil" } },
+  { "snacks_picker", { "snacks.picker.format" } },
+  { "telescope", { "telescope.make_entry" } },
+  {
+    "telescope_file_browser",
+    {
+      "telescope",
+      "telescope._extensions.file_browser.make_entry_utils",
+    },
+  },
+}
+
 local function health()
   if vim.health then
     return {
@@ -41,19 +60,23 @@ function M.check()
     h.warn("termguicolors is disabled; image ids need exact foreground colors")
   end
 
-  if backend.supports_terminal() then
-    h.ok("Ghostty-like environment detected")
+  local detected = backend.detect({ refresh = true })
+  if detected.supported then
+    h.ok("Terminal detected: " .. detected.terminal .. " via " .. detected.protocol .. " protocol")
   else
-    h.warn("Ghostty was not detected; real image rendering will use fallback glyphs")
+    h.warn("No supported terminal detected; real image rendering will use fallback glyphs")
+    if detected.reason then
+      h.info(detected.reason)
+    end
   end
 
-  if backend.in_tmux() then
+  if detected.tmux then
     h.info("tmux detected")
-    local client_term = backend.tmux_client_term()
-    if client_term and client_term:find("ghostty", 1, true) then
+    local client_term = detected.tmux_client_term or backend.tmux_client_term()
+    if client_term and detected.supported then
       h.ok("tmux client terminal is " .. client_term)
     else
-      h.warn("tmux client terminal is not Ghostty: " .. (client_term or "unknown"))
+      h.warn("tmux client terminal is not recognized: " .. (client_term or "unknown"))
     end
 
     local passthrough = backend.tmux_passthrough()
@@ -64,10 +87,41 @@ function M.check()
     end
   end
 
+  for _, integration in ipairs(integrations) do
+    local name = integration[1]
+    local modules = integration[2]
+    if config.options.integrations[name] then
+      local missing = {}
+      for _, module in ipairs(modules) do
+        local ok = pcall(require, module)
+        if not ok then
+          missing[#missing + 1] = module
+        end
+      end
+      if #missing == 0 then
+        h.ok("Integration dependency available: " .. name)
+      else
+        h.warn(
+          "Integration enabled but dependencies are not available: "
+            .. name
+            .. " ("
+            .. table.concat(missing, ", ")
+            .. ")"
+        )
+      end
+    end
+  end
+
   local pack = packs.get()
   h.info("Active pack: " .. pack.name)
+  local pack_error = packs.last_error(config.options.pack)
   if packs.installed(config.options.pack) then
-    h.ok("Active icon pack is available")
+    if pack_error then
+      h.warn("Configured icon pack failed to load; using builtin fallback pack")
+      h.info(pack_error)
+    else
+      h.ok("Active icon pack is available")
+    end
   elseif config.options.pack == "material" then
     h.warn("Material icon pack is not installed; using builtin fallback pack")
     h.info("Run :RealIconsInstallPack material")
@@ -80,9 +134,9 @@ function M.check()
   end
 
   if vim.fn.executable("magick") == 1 then
-    h.ok("ImageMagick available for SVG conversion")
+    h.ok("ImageMagick available for icon conversion")
   else
-    h.warn("ImageMagick is not available; SVG icon packs cannot be rendered")
+    h.warn("ImageMagick is not available; SVG icon packs and color transforms cannot be rendered")
   end
 
   local default_icon = require("real-icons.resolver").resolve("README.md", { is_dir = false })

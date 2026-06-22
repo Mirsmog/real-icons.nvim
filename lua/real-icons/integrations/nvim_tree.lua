@@ -42,6 +42,10 @@ function M.setup()
   end
 
   original_icon_name_decorated = Builder.icon_name_decorated
+  if type(original_icon_name_decorated) ~= "function" then
+    return false, "nvim-tree renderer builder API is not compatible"
+  end
+
   Builder.icon_name_decorated = function(builder, node)
     local icon, name = original_icon_name_decorated(builder, node)
     local ok_icon, real_icon = pcall(M.icon_for_node, node)

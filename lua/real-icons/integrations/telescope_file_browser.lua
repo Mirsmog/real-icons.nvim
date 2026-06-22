@@ -92,7 +92,7 @@ local function patch_telescope_highlighter()
   end
 
   local ok, highlights = pcall(require, "telescope.pickers.highlights")
-  if not ok or highlights._real_icons_patched then
+  if not ok or type(highlights.new) ~= "function" or highlights._real_icons_patched then
     patched_highlighter = true
     return
   end
@@ -100,11 +100,17 @@ local function patch_telescope_highlighter()
   local original_new = highlights.new
   highlights.new = function(...)
     local highlighter = original_new(...)
+    if type(highlighter) ~= "table" then
+      return highlighter
+    end
     if highlighter._real_icons_patched then
       return highlighter
     end
 
     local original_hi_selection = highlighter.hi_selection
+    if type(original_hi_selection) ~= "function" then
+      return highlighter
+    end
     highlighter.hi_selection = function(self, row, caret)
       original_hi_selection(self, row, caret)
       protect_selected_icon(self, row)
@@ -129,7 +135,7 @@ local function get_fb_prompt(state)
   end
 
   local prompt_bufnrs = vim.tbl_filter(function(bufnr)
-    return vim.bo[bufnr].filetype == "TelescopePrompt"
+    return vim.api.nvim_buf_is_loaded(bufnr) and vim.bo[bufnr].filetype == "TelescopePrompt"
   end, vim.api.nvim_list_bufs())
 
   return prompt_bufnrs[1]

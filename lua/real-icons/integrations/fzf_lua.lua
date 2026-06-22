@@ -158,6 +158,10 @@ function M.setup(opts)
     return false, "fzf-lua is not available"
   end
 
+  if type(fzf_lua.setup) ~= "function" then
+    return false, "fzf-lua setup API is not compatible"
+  end
+
   fzf_lua.setup(M.opts(opts))
   return true
 end

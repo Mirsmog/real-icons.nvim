@@ -4,6 +4,7 @@ local path_util = require("real-icons.path")
 local M = {}
 
 local loaded = {}
+local load_errors = {}
 
 local material = {
   name = "material",
@@ -42,7 +43,11 @@ local function load_spec(name, spec)
   if not ok then
     return nil, "unknown pack loader: " .. loader_name
   end
-  return loader.load(name, spec)
+  local loaded_ok, pack, err = pcall(loader.load, name, spec)
+  if not loaded_ok then
+    return nil, pack
+  end
+  return pack, err
 end
 
 function M.installed(name)
@@ -68,8 +73,17 @@ function M.get(name)
 
   local spec = spec_for(name)
   local pack
+  local err
+  load_errors[name] = nil
   if spec and M.installed(name) then
-    pack = load_spec(name, spec)
+    pack, err = load_spec(name, spec)
+    if not pack then
+      load_errors[name] = err or "failed to load pack"
+    end
+  elseif spec then
+    load_errors[name] = "pack is not installed"
+  else
+    load_errors[name] = "unknown icon pack"
   end
 
   if not pack then
@@ -107,6 +121,10 @@ function M.names()
 
   table.sort(names)
   return names
+end
+
+function M.last_error(name)
+  return load_errors[name or config.options.pack]
 end
 
 local function run(command)

@@ -3,8 +3,17 @@ local resolver = require("real-icons.resolver")
 
 local M = {}
 
+local uv = vim.uv or vim.loop
 local group = vim.api.nvim_create_augroup("real-icons-oil", { clear = true })
 local attached = {}
+local timers = {}
+
+local function close_timer(timer)
+  if timer and not timer:is_closing() then
+    timer:stop()
+    timer:close()
+  end
+end
 
 local function join(dir, name)
   if dir:sub(-1) == "/" then
@@ -50,14 +59,33 @@ function M.attach(bufnr)
   end
   attached[bufnr] = true
 
-  vim.api.nvim_create_autocmd({ "BufWinEnter", "TextChanged", "TextChangedI" }, {
-    group = group,
-    buffer = bufnr,
-    callback = function()
+  local function schedule_refresh()
+    if timers[bufnr] then
+      close_timer(timers[bufnr])
+    end
+
+    local timer = uv.new_timer()
+    if not timer then
       vim.schedule(function()
         M.refresh(bufnr)
       end)
-    end,
+      return
+    end
+
+    timers[bufnr] = timer
+    timer:start(30, 0, vim.schedule_wrap(function()
+      if timers[bufnr] == timer then
+        timers[bufnr] = nil
+      end
+      close_timer(timer)
+      M.refresh(bufnr)
+    end))
+  end
+
+  vim.api.nvim_create_autocmd({ "BufWinEnter", "TextChanged", "TextChangedI" }, {
+    group = group,
+    buffer = bufnr,
+    callback = schedule_refresh,
   })
 
   vim.api.nvim_create_autocmd("BufWipeout", {
@@ -65,12 +93,14 @@ function M.attach(bufnr)
     buffer = bufnr,
     callback = function()
       attached[bufnr] = nil
+      if timers[bufnr] then
+        close_timer(timers[bufnr])
+        timers[bufnr] = nil
+      end
     end,
   })
 
-  vim.schedule(function()
-    M.refresh(bufnr)
-  end)
+  schedule_refresh()
 end
 
 function M.attach_current()

@@ -40,6 +40,10 @@ function M.setup(opts)
   end
 
   local original_setup = bufferline.setup
+  if type(original_setup) ~= "function" then
+    return false, "bufferline.nvim setup API is not compatible"
+  end
+
   bufferline.setup = function(user_config)
     return original_setup(vim.tbl_deep_extend("force", M.opts(opts), user_config or {}))
   end

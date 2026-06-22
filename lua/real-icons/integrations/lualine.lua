@@ -132,6 +132,10 @@ function M.setup(opts)
   end
 
   local original_setup = lualine.setup
+  if type(original_setup) ~= "function" then
+    return false, "lualine.nvim setup API is not compatible"
+  end
+
   lualine.setup = function(user_config)
     return original_setup(M.apply_config(user_config, opts))
   end

@@ -49,8 +49,13 @@ function M.setup(opts)
   end
 
   local original_setup = files.setup
+  if type(original_setup) ~= "function" then
+    return false, "mini.files setup API is not compatible"
+  end
+
   files.setup = function(user_config)
-    return original_setup(M.opts(vim.tbl_deep_extend("force", opts or {}, user_config or {})))
+    local merged = vim.tbl_deep_extend("force", {}, opts or {}, user_config or {})
+    return original_setup(M.opts(merged))
   end
 
   files._real_icons_patched = true

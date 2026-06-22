@@ -62,9 +62,14 @@ function M.filename(item, picker)
     ret[#ret + 1] = { " ", virtual = true }
   end
 
-  vim.list_extend(ret, with_builtin_icons_disabled(picker, function()
+  local chunks = with_builtin_icons_disabled(picker, function()
     return original_filename(item, picker)
-  end))
+  end)
+  if type(chunks) == "table" then
+    vim.list_extend(ret, chunks)
+  elseif chunks ~= nil then
+    ret[#ret + 1] = { tostring(chunks) }
+  end
   return ret
 end
 
@@ -84,6 +89,10 @@ function M.setup()
   end
 
   original_filename = format.filename
+  if type(original_filename) ~= "function" then
+    return false, "snacks.nvim picker format API is not compatible"
+  end
+
   format.filename = M.filename
   format._real_icons_patched = true
   patched = true

@@ -22,12 +22,15 @@ local function icon_path(entry)
 end
 
 function M.gen_from_file(opts)
-  opts = vim.tbl_deep_extend("force", opts or {}, {
+  opts = vim.tbl_deep_extend("force", {}, opts or {}, {
     disable_devicons = true,
   })
 
   local make_entry = require("telescope.make_entry")
   local base = original_gen_from_file or make_entry.gen_from_file
+  if type(base) ~= "function" then
+    error("telescope make_entry.gen_from_file API is not compatible")
+  end
   local base_entry_maker = base(opts)
 
   return function(line)
@@ -37,6 +40,10 @@ function M.gen_from_file(opts)
     end
 
     local base_display = entry.display
+    if type(base_display) ~= "function" then
+      return entry
+    end
+
     entry.display = function(display_entry)
       local display, path_style = base_display(display_entry)
       local icon = resolver.resolve(icon_path(display_entry), { is_dir = false })
@@ -62,15 +69,23 @@ function M.setup()
   require("real-icons.integrations.telescope_file_browser").setup()
 
   local ok, make_entry = pcall(require, "telescope.make_entry")
-  if not ok or make_entry._real_icons_patched then
+  if not ok then
+    return false, "telescope is not available"
+  end
+  if make_entry._real_icons_patched then
     patched = true
-    return
+    return true
   end
 
   original_gen_from_file = make_entry.gen_from_file
+  if type(original_gen_from_file) ~= "function" then
+    return false, "telescope make_entry.gen_from_file API is not compatible"
+  end
+
   make_entry.gen_from_file = M.gen_from_file
   make_entry._real_icons_patched = true
   patched = true
+  return true
 end
 
 function M.is_patched()
