@@ -13,6 +13,8 @@ local did_setup = false
 function M.setup(opts)
   config.setup(opts)
   packs.clear_cache()
+  backend.clear_uploaded()
+  renderer.reset_cache()
   did_setup = true
 
   if config.options.integrations.oil then
@@ -101,12 +103,12 @@ end
 
 function M.is_supported()
   ensure_setup()
-  return backend.supports_terminal() and vim.o.termguicolors
+  return backend.detect().supported and vim.o.termguicolors
 end
 
 function M.backend()
   ensure_setup()
-  if backend.supports_terminal() then
+  if M.is_supported() then
     return backend.in_tmux() and "kitty-placeholder-tmux" or "kitty-placeholder"
   end
   return "fallback"
@@ -114,14 +116,23 @@ end
 
 function M.capabilities()
   ensure_setup()
+  local detected = backend.detect()
+  local images = detected.supported and vim.o.termguicolors
+  local reason
+  if not images then
+    reason = not vim.o.termguicolors and "termguicolors disabled" or detected.reason
+  end
   return {
-    images = backend.supports_terminal() and vim.o.termguicolors,
+    images = images,
     renderer = M.backend(),
-    terminal = backend.supports_terminal() and "ghostty" or "unknown",
-    tmux = backend.in_tmux(),
+    terminal = detected.terminal,
+    protocol = detected.protocol,
+    tmux = detected.tmux,
+    tmux_client_term = detected.tmux_client_term,
     placeholders = true,
     fallback = config.options.fallback.enabled,
     pack = packs.get().name,
+    reason = reason,
   }
 end
 
@@ -150,6 +161,7 @@ function M.use_pack(name, opts)
   config.options.pack = name
   packs.clear_cache()
   backend.clear_uploaded()
+  renderer.reset_cache()
   clear_rendered_icons()
   refresh_known_integrations()
 
@@ -180,6 +192,7 @@ end
 function M.clear_cache(pack)
   cache.clear(pack)
   backend.clear_uploaded()
+  renderer.reset_cache()
   log.info("Icon cache cleared")
 end
 
@@ -230,7 +243,7 @@ function M.demo()
   vim.api.nvim_buf_set_name(bufnr, "real-icons-demo")
 
   local lines = {
-    "real-icons.nvim Ghostty placeholder demo",
+    "real-icons.nvim terminal image placeholder demo",
     "",
   }
   for _, item in ipairs(items) do

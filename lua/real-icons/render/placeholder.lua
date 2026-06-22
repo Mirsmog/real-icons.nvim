@@ -8,6 +8,9 @@ M.ns = vim.api.nvim_create_namespace("real-icons")
 
 local placeholder_char
 local diacritics
+local placeholder_cache = {}
+local segment_cache = {}
+local hl_cache = {}
 
 local function init_chars()
   if placeholder_char then
@@ -24,9 +27,23 @@ end
 local function diacritic(n)
   init_chars()
   if not diacritics[n] then
-    error("real-icons MVP supports placeholder rows/cols 0..2 only")
+    error("real-icons placeholder renderer supports size.cols from 1 to 3")
   end
   return diacritics[n]
+end
+
+local function normalize_cells(cols, rows)
+  cols = tonumber(cols) or 1
+  rows = tonumber(rows) or 1
+
+  if cols < 1 or cols > 3 or cols % 1 ~= 0 then
+    error("real-icons placeholder renderer supports size.cols from 1 to 3")
+  end
+  if rows ~= 1 then
+    error("real-icons placeholder renderer currently supports size.rows = 1")
+  end
+
+  return cols, rows
 end
 
 local function hl_for_image(image_id, opts)
@@ -38,6 +55,11 @@ local function hl_for_image(image_id, opts)
   end
 
   local name = string.format("RealIconsImage%06x%s", image_id, suffix)
+  local cache_key = name .. "|" .. tostring(background)
+  if hl_cache[cache_key] then
+    return name
+  end
+
   local hl = {
     fg = string.format("#%06x", image_id % 0x1000000),
   }
@@ -45,10 +67,40 @@ local function hl_for_image(image_id, opts)
     hl.bg = background
   end
   vim.api.nvim_set_hl(0, name, hl)
+  hl_cache[cache_key] = true
   return name
 end
 
+local function size_key(size, color)
+  local dimensions = cache.dimensions(size)
+  return table.concat({
+    dimensions.width,
+    dimensions.height,
+    size.padding or 0,
+    tostring(size.trim ~= false),
+    cache.color_key(color),
+  }, "x")
+end
+
+local function segment_key(icon, size, cols, rows, opts)
+  return table.concat({
+    icon.pack or "",
+    icon.key or "",
+    icon.source or icon.asset or "",
+    size_key(size, opts.color),
+    cols,
+    rows,
+    opts.background or opts.bg or "",
+  }, "|")
+end
+
 function M.placeholder(cols, rows)
+  cols, rows = normalize_cells(cols, rows)
+  local key = cols .. "x" .. rows
+  if placeholder_cache[key] then
+    return placeholder_cache[key]
+  end
+
   init_chars()
   local lines = {}
   for row = 0, rows - 1 do
@@ -58,6 +110,7 @@ function M.placeholder(cols, rows)
     end
     table.insert(lines, table.concat(text))
   end
+  placeholder_cache[key] = lines
   return lines
 end
 
@@ -66,10 +119,11 @@ function M.render(bufnr, row, col, icon, opts)
   local size = opts.size or config.options.size
   local cols = opts.cols or size.cols
   local rows = opts.rows or size.rows
+  cols, rows = normalize_cells(cols, rows)
   local use_images = opts.image ~= false and backend.supports_terminal() and vim.o.termguicolors
 
   if use_images then
-    local render_path, cache_err = cache.ensure(icon, { size = size })
+    local render_path, cache_err = cache.ensure(icon, { size = size, color = opts.color })
     if render_path then
       icon = vim.tbl_extend("force", icon, { asset = render_path })
 
@@ -107,10 +161,16 @@ function M.segment(icon, opts)
   local size = opts.size or config.options.size
   local cols = opts.cols or size.cols
   local rows = opts.rows or size.rows
+  cols, rows = normalize_cells(cols, rows)
   local use_images = opts.image ~= false and backend.supports_terminal() and vim.o.termguicolors
 
   if use_images then
-    local render_path = cache.ensure(icon, { size = size })
+    local key = segment_key(icon, size, cols, rows, opts)
+    if segment_cache[key] then
+      return segment_cache[key]
+    end
+
+    local render_path = cache.ensure(icon, { size = size, color = opts.color })
     if render_path then
       local render_icon = vim.tbl_extend("force", icon, { asset = render_path })
       local image_id = backend.upload(render_icon, {
@@ -119,11 +179,13 @@ function M.segment(icon, opts)
         size = size,
       })
       if image_id then
-        return {
+        local segment = {
           text = M.placeholder(cols, rows)[1],
           hl = hl_for_image(image_id, opts),
           width = cols,
         }
+        segment_cache[key] = segment
+        return segment
       end
     end
   end
@@ -146,5 +208,15 @@ end
 function M.clear(bufnr)
   vim.api.nvim_buf_clear_namespace(bufnr, M.ns, 0, -1)
 end
+
+function M.reset_cache()
+  segment_cache = {}
+  hl_cache = {}
+end
+
+vim.api.nvim_create_autocmd("ColorScheme", {
+  group = vim.api.nvim_create_augroup("RealIconsRenderer", { clear = true }),
+  callback = M.reset_cache,
+})
 
 return M

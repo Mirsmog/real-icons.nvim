@@ -4,6 +4,13 @@ local path_util = require("real-icons.path")
 local M = {}
 
 local uv = vim.uv or vim.loop
+local supported_formats = {
+  svg = true,
+  png = true,
+  jpg = true,
+  jpeg = true,
+  webp = true,
+}
 
 local function safe_name(value)
   return (value:gsub("[^%w%._%-]+", "_"))
@@ -48,20 +55,107 @@ function M.dimensions(size)
   }
 end
 
-local function variant(size)
+local function normalize_color(color)
+  if color == nil then
+    color = config.options.color
+  end
+
+  if color == false or color == nil then
+    color = {}
+  elseif type(color) == "string" then
+    color = { tint = color }
+  elseif type(color) ~= "table" then
+    color = {}
+  end
+
+  return {
+    tint = color.tint or color.mask or color.mask_color,
+    saturation = tonumber(color.saturation) or 0,
+    brightness = tonumber(color.brightness or color.lightness) or 0,
+    hue = tonumber(color.hue) or 0,
+    monochrome = color.monochrome == true or color.grayscale == true,
+  }
+end
+
+function M.has_color_transform(color)
+  color = normalize_color(color)
+  return color.tint ~= nil
+    or color.monochrome
+    or color.saturation ~= 0
+    or color.brightness ~= 0
+    or color.hue ~= 0
+end
+
+function M.color_key(color)
+  color = normalize_color(color)
+  if not M.has_color_transform(color) then
+    return "native"
+  end
+
+  return safe_name(table.concat({
+    color.tint or "none",
+    color.monochrome and "mono" or "color",
+    "s" .. color.saturation,
+    "b" .. color.brightness,
+    "h" .. color.hue,
+  }, "_"))
+end
+
+local function variant(size, color)
   local dimensions = M.dimensions(size)
   local padding = size.padding or 0
   local trim = size.trim ~= false and "trim" or "raw"
-  return string.format("%dx%d-p%d-%s", dimensions.width, dimensions.height, padding, trim)
+  return string.format(
+    "%dx%d-p%d-%s-%s",
+    dimensions.width,
+    dimensions.height,
+    padding,
+    trim,
+    M.color_key(color)
+  )
 end
 
-function M.target(icon, size)
+function M.target(icon, size, color)
   size = size or config.options.size
   local name = safe_name(icon.pack .. "__" .. icon.key)
-  return path_util.join(M.pack_dir(icon.pack), variant(size), name .. ".png")
+  return path_util.join(M.pack_dir(icon.pack), variant(size, color), name .. ".png")
 end
 
-local function convert_with_magick(source, target, size)
+local function append_color_transform(command, color)
+  color = normalize_color(color)
+
+  if color.monochrome then
+    vim.list_extend(command, {
+      "-colorspace",
+      "Gray",
+      "-colorspace",
+      "sRGB",
+    })
+  end
+
+  if color.tint then
+    vim.list_extend(command, {
+      "-fill",
+      tostring(color.tint),
+      "-colorize",
+      "100",
+    })
+  end
+
+  if color.saturation ~= 0 or color.brightness ~= 0 or color.hue ~= 0 then
+    vim.list_extend(command, {
+      "-modulate",
+      string.format(
+        "%d,%d,%d",
+        math.max(0, 100 + color.brightness),
+        math.max(0, 100 + color.saturation),
+        math.max(0, 100 + color.hue)
+      ),
+    })
+  end
+end
+
+local function convert_with_magick(source, target, size, color)
   local dimensions = M.dimensions(size)
   local padding = size.padding or 0
   local inner_width = math.max(1, dimensions.width - padding * 2)
@@ -78,6 +172,8 @@ local function convert_with_magick(source, target, size)
     "-alpha",
     "on",
   }
+
+  append_color_transform(command, color)
 
   if size.trim ~= false then
     vim.list_extend(command, {
@@ -117,26 +213,32 @@ function M.ensure(icon, opts)
 
   local ext = source:match("%.([^.]+)$")
   ext = ext and ext:lower() or ""
-  if ext == "png" and png_signature(source) then
+
+  local size = opts.size or config.options.size
+  local color = opts.color
+  if color == nil then
+    color = config.options.color
+  end
+  local color_transform = M.has_color_transform(color)
+  if ext == "png" and png_signature(source) and not color_transform then
     return source
   end
 
-  if ext ~= "svg" then
+  if not supported_formats[ext] then
     return nil, "unsupported icon format: " .. ext
   end
 
-  local size = opts.size or config.options.size
-  local target = M.target(icon, size)
+  local target = M.target(icon, size, color)
   local target_stat = uv.fs_stat(target)
   if target_stat and target_stat.mtime.sec >= file_mtime(source) then
     return target
   end
 
   if vim.fn.executable("magick") ~= 1 then
-    return nil, "ImageMagick is required to convert SVG icons"
+    return nil, "ImageMagick is required to convert icons"
   end
 
-  local ok, err = convert_with_magick(source, target, size)
+  local ok, err = convert_with_magick(source, target, size, color)
   if not ok then
     return nil, err
   end

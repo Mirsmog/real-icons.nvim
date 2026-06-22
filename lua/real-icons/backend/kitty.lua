@@ -6,7 +6,7 @@ local uv = vim.uv or vim.loop
 
 local ESC = string.char(27)
 local uploaded = {}
-local supports_terminal_cache
+local detect_cache
 
 local b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
@@ -68,6 +68,59 @@ function M.tmux_client_term()
   return vim.trim(output):lower()
 end
 
+local function option_backend()
+  local value = config.options.backend
+  if value == nil then
+    return "auto"
+  end
+  if value == false then
+    return "disabled"
+  end
+  value = tostring(value):lower()
+  if value == "ghostty" then
+    return "auto"
+  end
+  if value == "kitty-graphics" or value == "kitty-placeholder" then
+    return "kitty"
+  end
+  if value == "none" or value == "off" or value == "false" then
+    return "disabled"
+  end
+  return value
+end
+
+local function env_lower(name)
+  return ((vim.env[name] or "")):lower()
+end
+
+local function detect_from_env()
+  local term_program = env_lower("TERM_PROGRAM")
+  local term = env_lower("TERM")
+
+  if term_program:find("ghostty", 1, true) or vim.env.GHOSTTY_RESOURCES_DIR or vim.env.GHOSTTY_BIN_DIR then
+    return "ghostty", "environment"
+  end
+
+  if term_program:find("kitty", 1, true) or vim.env.KITTY_WINDOW_ID or term:find("xterm%-kitty") then
+    return "kitty", "environment"
+  end
+end
+
+local function detect_from_tmux()
+  local client_term = M.tmux_client_term()
+  if not client_term then
+    return nil, nil, nil
+  end
+
+  if client_term:find("ghostty", 1, true) then
+    return "ghostty", "tmux", client_term
+  end
+  if client_term:find("kitty", 1, true) or client_term:find("xterm%-kitty") then
+    return "kitty", "tmux", client_term
+  end
+  return nil, nil, client_term
+end
+
 function M.tmux_passthrough()
   if not M.in_tmux() then
     return nil
@@ -86,23 +139,72 @@ function M.wrap_for_tmux(data)
   return ESC .. "Ptmux;" .. data:gsub(ESC, ESC .. ESC) .. ESC .. "\\"
 end
 
-function M.supports_terminal()
-  if supports_terminal_cache ~= nil then
-    return supports_terminal_cache
+function M.detect(opts)
+  opts = opts or {}
+  if detect_cache ~= nil and not opts.refresh then
+    return detect_cache
   end
 
-  local term_program = (vim.env.TERM_PROGRAM or ""):lower()
-  if term_program:find("ghostty", 1, true) then
-    supports_terminal_cache = true
-    return true
+  local backend = option_backend()
+  local tmux = M.in_tmux()
+
+  if backend ~= "auto" and backend ~= "kitty" and backend ~= "disabled" then
+    detect_cache = {
+      supported = false,
+      backend = backend,
+      protocol = "none",
+      terminal = "unsupported",
+      tmux = tmux,
+      reason = "unknown backend: " .. backend,
+    }
+    return detect_cache
   end
-  if vim.env.GHOSTTY_RESOURCES_DIR or vim.env.GHOSTTY_BIN_DIR then
-    supports_terminal_cache = true
-    return true
+
+  if backend == "disabled" then
+    detect_cache = {
+      supported = false,
+      backend = backend,
+      protocol = "none",
+      terminal = "disabled",
+      tmux = tmux,
+      reason = "backend disabled",
+    }
+    return detect_cache
   end
-  local tmux_term = M.tmux_client_term()
-  supports_terminal_cache = tmux_term ~= nil and tmux_term:find("ghostty", 1, true) ~= nil
-  return supports_terminal_cache
+
+  local terminal, source, tmux_client_term
+  if tmux then
+    terminal, source, tmux_client_term = detect_from_tmux()
+  end
+
+  if not terminal then
+    terminal, source = detect_from_env()
+    if tmux then
+      tmux_client_term = tmux_client_term or M.tmux_client_term()
+    end
+  end
+
+  local force_kitty = backend == "kitty"
+  local supported = terminal ~= nil or force_kitty
+  local reason
+  if not supported then
+    reason = "no Kitty Graphics Protocol compatible terminal detected"
+  end
+  detect_cache = {
+    supported = supported,
+    backend = backend,
+    protocol = supported and "kitty" or "none",
+    terminal = terminal or (force_kitty and "unknown" or "unsupported"),
+    tmux = tmux,
+    tmux_client_term = tmux_client_term,
+    source = source or (force_kitty and "forced" or "none"),
+    reason = reason,
+  }
+  return detect_cache
+end
+
+function M.supports_terminal()
+  return M.detect().supported
 end
 
 function M.image_id(path)
@@ -142,7 +244,7 @@ end
 
 function M.clear_uploaded()
   uploaded = {}
-  supports_terminal_cache = nil
+  detect_cache = nil
 end
 
 return M
