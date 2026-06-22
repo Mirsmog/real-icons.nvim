@@ -4,7 +4,7 @@ Graphical file icons for Neovim terminal UIs.
 
 `real-icons.nvim` renders real image icons in places where Neovim plugins
 normally use Nerd Font glyphs. It uses Kitty Graphics Protocol Unicode
-placeholders, targets Ghostty first, supports Ghostty inside tmux, and falls
+placeholders, supports Ghostty and Kitty, supports tmux passthrough, and falls
 back to glyph icons when image rendering is unavailable.
 
 ## Preview
@@ -19,7 +19,7 @@ Flow Icons local VS Code theme:
 
 ## Status
 
-Experimental, usable today on Ghostty. The renderer, Material Icon Theme
+Experimental, usable today on Ghostty and Kitty. The renderer, Material Icon Theme
 installer, SVG raster cache, custom icon packs, tmux passthrough, and listed
 integrations are implemented. Public APIs may change before v1.0.
 
@@ -27,6 +27,8 @@ integrations are implemented. Public APIs may change before v1.0.
 
 - Real image icons rendered in terminal UI rows.
 - SVG icon packs rasterized into a local high-density PNG cache.
+- Cache-time icon color transforms for grayscale, tint, brightness, saturation,
+  and hue adjustments.
 - VS Code icon theme support, including private local icon packs.
 - Opt-in integrations for popular Neovim file pickers, explorers, statuslines,
   and tablines.
@@ -36,9 +38,9 @@ integrations are implemented. Public APIs may change before v1.0.
 ## Requirements
 
 - Neovim 0.10+
-- Ghostty
+- Ghostty or Kitty
 - `termguicolors`
-- `magick` from ImageMagick for SVG icon packs
+- `magick` from ImageMagick for SVG icon packs and color transforms
 - `curl` and `tar` for `:RealIconsInstallPack material`
 
 For tmux, enable passthrough and RGB color support:
@@ -103,13 +105,20 @@ require("real-icons").setup({
   pack = "material",
   packs = {},
   overrides = {},
-  backend = "ghostty",
+  backend = "auto",
   size = {
     cols = 2,
     rows = 1,
     pixels = 64,
     padding = 0,
     trim = false,
+  },
+  color = {
+    tint = nil,
+    saturation = 0,
+    brightness = 0,
+    hue = 0,
+    monochrome = false,
   },
   fallback = {
     enabled = true,
@@ -130,18 +139,46 @@ require("real-icons").setup({
 })
 ```
 
-`size.cols` and `size.rows` reserve terminal cells for the placeholder.
+`backend = "auto"` detects Kitty Graphics Protocol compatible terminals.
+`backend = "kitty"` forces the Kitty Graphics Protocol renderer, and
+`backend = "disabled"` forces glyph fallback.
+
+`size.cols` reserves terminal cells for the placeholder. `size.rows` currently
+must be `1`.
 `size.pixels` controls the generated PNG size. The default keeps SVG sources and
 rasterizes them into a high-density PNG cache, which gives sharper icons than
 using a small raster source.
 
 If an icon pack has too much transparent padding, set `trim = true`. If icons
 look too large after trimming, add `padding = 4` or `padding = 6`. After changing
-size options, run:
+size or color options, run:
 
 ```vim
 :RealIconsClearCache material
 ```
+
+Color transforms are applied while building the PNG cache:
+
+```lua
+require("real-icons").setup({
+  color = {
+    saturation = -100, -- grayscale
+  },
+})
+```
+
+```lua
+require("real-icons").setup({
+  color = {
+    tint = "#89b4fa", -- replace icon colors while preserving alpha
+  },
+})
+```
+
+Use `brightness`, `saturation`, and `hue` as percentage offsets where `0` is
+neutral. Aliases are also accepted: `lightness` for `brightness`, `mask` and
+`mask_color` for `tint`, and `grayscale` for `monochrome`. A string value such
+as `color = "#89b4fa"` is treated as a tint.
 
 ## Icon Packs
 
@@ -538,7 +575,7 @@ ImageMagick, tmux passthrough, and the active icon pack.
 
 If icons do not appear:
 
-- Confirm you are running inside Ghostty.
+- Confirm you are running inside Ghostty or Kitty.
 - Confirm `vim.o.termguicolors` is enabled.
 - Install the default pack with `:RealIconsInstallPack material`.
 - Run `:RealIconsDemo` outside tmux, then inside tmux.
@@ -549,7 +586,7 @@ If icons are blurry:
 - Keep SVG packs as sources when possible.
 - Increase `size.pixels`.
 - Use `cols = 2` for one-row icons.
-- Clear the cache after changing size options.
+- Clear the cache after changing size or color options.
 
 If a selected row hides the icon, the plugin integration must return the
 `RealIconsImage...` highlight group for the icon segment. Report the integration
@@ -559,8 +596,8 @@ and plugin version if that happens in a supported integration.
 
 1. Resolve a path to an icon key using VS Code icon theme mappings, a simple
    local pack, overrides, or the bundled fallback pack.
-2. Convert SVG sources into cached PNG files at the configured pixel size.
-3. Upload the PNG to Ghostty through Kitty Graphics Protocol.
+2. Convert image sources into cached PNG files at the configured pixel size.
+3. Upload the PNG to the terminal through Kitty Graphics Protocol.
 4. Place a `U+10EEEE` Unicode placeholder in the Neovim grid with the image id
    encoded in the foreground color.
 5. In tmux, wrap the graphics upload in DCS passthrough.
@@ -570,7 +607,7 @@ positions instead of absolute pixel placement.
 
 ## Limitations
 
-- Ghostty is the primary supported terminal.
+- Ghostty and Kitty are the primary supported terminals.
 - Image rendering depends on terminal support for Kitty Graphics Protocol
   Unicode placeholders.
 - Unsupported terminals use glyph fallback when a fallback provider is

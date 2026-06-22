@@ -16,12 +16,11 @@ CONTENTS                                                    *real-icons-contents
 INTRODUCTION                                          *real-icons-introduction*
 
 real-icons.nvim renders file and folder icons as real terminal images. It uses
-Kitty Graphics Protocol Unicode placeholders, with Ghostty as the primary
-target. When image rendering is unavailable, integrations can fall back to glyph
-icon providers such as mini.icons or nvim-web-devicons.
+Kitty Graphics Protocol Unicode placeholders, supports Ghostty and Kitty, and
+can fall back to glyph icon providers such as mini.icons or nvim-web-devicons.
 
-The project is experimental and usable today on Ghostty. Public APIs may change
-before v1.0.
+The project is experimental and usable today on Ghostty and Kitty. Public APIs
+may change before v1.0.
 
 It provides real image icons in terminal UI rows, SVG icon pack rasterization,
 VS Code icon theme support, custom local packs, and opt-in integrations for
@@ -31,9 +30,9 @@ popular Neovim UI plugins.
 REQUIREMENTS                                          *real-icons-requirements*
 
 - Neovim 0.10+
-- Ghostty
+- Ghostty or Kitty
 - termguicolors
-- ImageMagick for SVG icon packs
+- ImageMagick for SVG icon packs and color transforms
 - curl and tar for pack installation
 
 tmux requires passthrough and RGB color support:
@@ -67,13 +66,20 @@ Full configuration:
     pack = "material",
     packs = {},
     overrides = {},
-    backend = "ghostty",
+    backend = "auto",
     size = {
       cols = 2,
       rows = 1,
       pixels = 64,
       padding = 0,
       trim = false,
+    },
+    color = {
+      tint = nil,
+      saturation = 0,
+      brightness = 0,
+      hue = 0,
+      monochrome = false,
     },
     fallback = {
       enabled = true,
@@ -107,9 +113,36 @@ Icon sharpness:
   })
 <
 
-cols and rows reserve terminal cells. pixels controls the generated PNG size.
-If a pack has too much transparent padding, set trim = true. If icons look too
-large after trimming, add padding.
+backend = "auto" detects Kitty Graphics Protocol compatible terminals.
+backend = "kitty" forces the Kitty Graphics Protocol renderer, and
+backend = "disabled" forces glyph fallback.
+
+cols and rows reserve terminal cells. rows currently must be 1. pixels controls
+the generated PNG size. If a pack has too much transparent padding, set
+trim = true. If icons look too large after trimming, add padding.
+
+Color transforms are applied while building the PNG cache:
+>
+  require("real-icons").setup({
+    color = {
+      saturation = -100,
+    },
+  })
+<
+
+Use tint to replace icon colors while preserving alpha:
+>
+  require("real-icons").setup({
+    color = {
+      tint = "#89b4fa",
+    },
+  })
+<
+
+brightness, saturation, and hue are percentage offsets where 0 is neutral.
+Aliases are also accepted: lightness for brightness, mask and mask_color for
+tint, and grayscale for monochrome. A string value such as color = "#89b4fa"
+is treated as a tint.
 
 ==============================================================================
 ICON PACKS                                                  *real-icons-packs*
@@ -411,7 +444,7 @@ Run :RealIconsHealth first. It checks terminal support, termguicolors,
 ImageMagick, tmux passthrough, and the active icon pack.
 
 If icons do not appear:
-- Confirm you are running inside Ghostty.
+- Confirm you are running inside Ghostty or Kitty.
 - Confirm termguicolors is enabled.
 - Install the default pack with :RealIconsInstallPack material.
 - Run :RealIconsDemo outside tmux, then inside tmux.
@@ -421,6 +454,6 @@ If icons are blurry:
 - Keep SVG packs as sources when possible.
 - Increase size.pixels.
 - Use cols = 2 for one-row icons.
-- Clear the cache after changing size options.
+- Clear the cache after changing size or color options.
 
 vim:tw=78:ts=8:noet:ft=help:norl:
