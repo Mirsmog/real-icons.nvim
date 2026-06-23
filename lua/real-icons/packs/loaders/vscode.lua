@@ -2,6 +2,16 @@ local util = require("real-icons.packs.util")
 
 local M = {}
 
+local function resolve_relative(base, path)
+  if not path or path == "" then
+    return base
+  end
+  if path:sub(1, 1) == "/" then
+    return path
+  end
+  return vim.fs.normalize(base .. "/" .. path)
+end
+
 local function theme_manifest(root, spec)
   if spec.manifest then
     return util.join(root, spec.manifest)
@@ -18,11 +28,15 @@ local function theme_manifest(root, spec)
   local requested = spec.theme or spec.id
   local selected = icon_themes[1]
   if requested then
+    selected = nil
     for _, theme in ipairs(icon_themes) do
       if theme.id == requested or theme.label == requested then
         selected = theme
         break
       end
+    end
+    if not selected then
+      return nil, "icon theme not found: " .. requested
     end
   end
 
@@ -31,16 +45,21 @@ end
 
 function M.load(name, spec)
   local root = util.expand(assert(spec.path, "vscode icon pack requires path"))
-  local manifest_file = theme_manifest(root, spec)
+  local manifest_file, manifest_err = theme_manifest(root, spec)
+  if not manifest_file then
+    return nil, manifest_err
+  end
+
   local manifest, err = util.read_json(manifest_file)
   if not manifest then
     return nil, err
   end
 
+  local manifest_dir = vim.fs.dirname(manifest_file)
   local definitions = {}
   for key, value in pairs(manifest.iconDefinitions or {}) do
     if value.iconPath then
-      definitions[key] = util.join(root, value.iconPath)
+      definitions[key] = resolve_relative(manifest_dir, value.iconPath)
     end
   end
 
