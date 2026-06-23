@@ -86,27 +86,32 @@ function M.resolve(path, opts)
   end
 
   local pack = packs.get(opts.pack)
+  local definitions = pack.definitions or {}
+  local file_extensions = pack.file_extensions or {}
+  local file_names = pack.file_names or {}
+  local folder_names = pack.folder_names or {}
+  local language_ids = pack.language_ids or {}
   local key, source = resolve_override(path, opts, is_dir, name, lower_name)
   if is_dir then
-    key = key or normalize_key(pack.folder_names[lower_name] or pack.folder_names[name] or pack.folder)
+    key = key or normalize_key(folder_names[lower_name] or folder_names[name] or pack.folder)
   else
-    key = key or normalize_key(pack.file_names[lower_name] or pack.file_names[name])
+    key = key or normalize_key(file_names[lower_name] or file_names[name])
     if not key then
-      key = normalize_key(pack.file_extensions[path_util.extension(path) or ""])
+      key = normalize_key(file_extensions[path_util.extension(path) or ""])
     end
     if not key and opts.filetype then
-      key = normalize_key(pack.language_ids[opts.filetype])
+      key = normalize_key(language_ids[opts.filetype])
     end
     key = key or normalize_key(pack.file)
   end
 
-  source = source or (key and pack.definitions[key])
+  source = source or (key and definitions[key])
   if not source and is_dir then
     key = normalize_key(pack.folder)
-    source = key and pack.definitions[key]
+    source = key and definitions[key]
   elseif not source then
     key = normalize_key(pack.file)
-    source = key and pack.definitions[key]
+    source = key and definitions[key]
   end
 
   return {

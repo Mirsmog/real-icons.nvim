@@ -50,6 +50,17 @@ local function load_spec(name, spec)
   return pack, err
 end
 
+local function normalize_pack(name, pack)
+  pack = pack or {}
+  pack.name = pack.name or name or "builtin"
+  pack.definitions = pack.definitions or {}
+  pack.file_extensions = pack.file_extensions or {}
+  pack.file_names = pack.file_names or {}
+  pack.folder_names = pack.folder_names or {}
+  pack.language_ids = pack.language_ids or {}
+  return pack
+end
+
 function M.installed(name)
   if name == "builtin" then
     return true
@@ -90,6 +101,7 @@ function M.get(name)
     pack = require("real-icons.packs.loaders.builtin").load()
   end
 
+  pack = normalize_pack(name, pack)
   loaded[name] = pack
   return pack
 end

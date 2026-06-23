@@ -48,6 +48,7 @@ function M.load()
       tests = "folder-test",
       node_modules = "folder-node_modules",
     },
+    language_ids = {},
   }
 end
 
