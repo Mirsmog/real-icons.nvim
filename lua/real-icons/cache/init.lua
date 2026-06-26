@@ -1,5 +1,6 @@
 local config = require("real-icons.config")
 local path_util = require("real-icons.path")
+local bit = require("bit")
 
 local M = {}
 
@@ -14,6 +15,29 @@ local supported_formats = {
 
 local function safe_name(value)
   return (value:gsub("[^%w%._%-]+", "_"))
+end
+
+local function path_key(value)
+  value = tostring(value or "")
+  if value == "" then
+    return nil, "invalid pack name: " .. value
+  end
+  if value:match("^[%w_%-]+$") then
+    return value
+  end
+
+  local key = value:gsub("[^%w_%-]+", "_")
+  key = key:gsub("^_+", ""):gsub("_+$", "")
+  if key == "" then
+    key = "pack"
+  end
+
+  local hash = 2166136261
+  for index = 1, #value do
+    hash = bit.bxor(hash, value:byte(index))
+    hash = (hash * 16777619) % 4294967296
+  end
+  return string.format("%s-%08x", key, hash)
 end
 
 local function file_mtime(path)
@@ -35,8 +59,16 @@ function M.root()
   return path_util.join(path_util.cache_dir(), "packs")
 end
 
+function M.pack_key(pack)
+  return path_key(pack)
+end
+
 function M.pack_dir(pack)
-  return path_util.join(M.root(), pack)
+  local key, err = M.pack_key(pack)
+  if not key then
+    return nil, err
+  end
+  return path_util.join(M.root(), key)
 end
 
 function M.dimensions(size)
@@ -117,8 +149,12 @@ end
 
 function M.target(icon, size, color)
   size = size or config.options.size
-  local name = safe_name(icon.pack .. "__" .. icon.key)
-  return path_util.join(M.pack_dir(icon.pack), variant(size, color), name .. ".png")
+  local pack_dir, err = M.pack_dir(icon.pack)
+  if not pack_dir then
+    return nil, err
+  end
+  local name = safe_name(tostring(icon.pack) .. "__" .. tostring(icon.key))
+  return path_util.join(pack_dir, variant(size, color), name .. ".png")
 end
 
 local function append_color_transform(command, color)
@@ -228,7 +264,10 @@ function M.ensure(icon, opts)
     return nil, "unsupported icon format: " .. ext
   end
 
-  local target = M.target(icon, size, color)
+  local target, target_err = M.target(icon, size, color)
+  if not target then
+    return nil, target_err
+  end
   local target_stat = uv.fs_stat(target)
   if target_stat and target_stat.mtime.sec >= file_mtime(source) then
     return target
@@ -246,10 +285,19 @@ function M.ensure(icon, opts)
 end
 
 function M.clear(pack)
-  local target = pack and M.pack_dir(pack) or path_util.cache_dir()
+  local target, err
+  if pack then
+    target, err = M.pack_dir(pack)
+  else
+    target = path_util.cache_dir()
+  end
+  if not target then
+    return false, err
+  end
   if path_util.exists(target) then
     vim.fn.delete(target, "rf")
   end
+  return true
 end
 
 return M

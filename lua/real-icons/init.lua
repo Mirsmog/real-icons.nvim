@@ -255,10 +255,15 @@ function M.install_pack(name, opts)
 end
 
 function M.clear_cache(pack)
-  cache.clear(pack)
+  local ok, err = cache.clear(pack)
+  if not ok then
+    log.error(err)
+    return false, err
+  end
   backend.clear_uploaded()
   renderer.reset_cache()
   log.info("Icon cache cleared")
+  return true
 end
 
 function M.build_cache(opts)
