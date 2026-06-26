@@ -363,14 +363,11 @@ require("real-icons").setup({
 Manual setup:
 
 ```lua
-require("fzf-lua").setup(require("real-icons.integrations.fzf_lua").opts(), true)
+require("fzf-lua").setup(require("real-icons.integrations.fzf_lua").opts())
 ```
 
 This covers `files`, `oldfiles`, `history`, `git_files`, `git_diff`, `args`,
 and `complete_file`.
-
-The second `setup()` argument keeps any existing `fzf-lua` layout and provider
-options while applying the real-icons file entry transform.
 
 ### oil.nvim
 

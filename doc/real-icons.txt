@@ -275,11 +275,8 @@ fzf-lua:
 
 Manual fzf-lua setup:
 >
-  require("fzf-lua").setup(require("real-icons.integrations.fzf_lua").opts(), true)
+  require("fzf-lua").setup(require("real-icons.integrations.fzf_lua").opts())
 <
-
-The second setup() argument keeps existing fzf-lua layout and provider options
-while applying the real-icons file entry transform.
 
 oil.nvim:
 >
