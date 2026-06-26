@@ -66,10 +66,31 @@ local function copy_entry_opts(opts)
   entry_opts.file_icons = false
   entry_opts.color_icons = false
   entry_opts._fzf_nth_devicons = false
+  entry_opts.fn_transform = nil
+  entry_opts.fn_preprocess = nil
+  entry_opts.fn_postprocess = nil
   return entry_opts
 end
 
+local function raw_path(value)
+  if not value or value == "" then
+    return nil
+  end
+
+  local file_part = strip_ansi(value)
+  local colon = file_part:find(":", 1, true)
+  if colon and colon > 1 then
+    file_part = file_part:sub(1, colon - 1)
+  end
+  return file_part
+end
+
 local function entry_path(entry, opts, fallback)
+  local path = raw_path(fallback)
+  if path then
+    return path
+  end
+
   local ok, path_mod = pcall(require, "fzf-lua.path")
   if ok then
     local parsed_ok, parsed = pcall(path_mod.entry_to_file, entry, opts or {})
@@ -78,12 +99,7 @@ local function entry_path(entry, opts, fallback)
     end
   end
 
-  local file_part = strip_ansi(fallback or entry or "")
-  local colon = file_part:find(":", 1, true)
-  if colon and colon > 1 then
-    file_part = file_part:sub(1, colon - 1)
-  end
-  return file_part
+  return raw_path(entry) or ""
 end
 
 local function with_icon(entry, opts, raw)
@@ -92,8 +108,13 @@ local function with_icon(entry, opts, raw)
   end
 
   local path = entry_path(entry, opts, raw)
+  local is_dir = opts and opts._real_icons_is_dir
+  if is_dir == nil then
+    is_dir = vim.fn.isdirectory(path) == 1
+  end
+
   local icon = resolver.resolve(path, {
-    is_dir = vim.fn.isdirectory(path) == 1,
+    is_dir = is_dir,
   })
   local segment = renderer.segment(icon)
   return colorize(segment) .. nbsp() .. entry
@@ -122,6 +143,7 @@ local function file_opts(extra)
     file_icons = false,
     color_icons = false,
     multiprocess = false,
+    _real_icons_is_dir = false,
     fn_transform = [[return require("real-icons.integrations.fzf_lua").transform]],
     fn_preprocess = [[return require("real-icons.integrations.fzf_lua").preprocess]],
     fzf_opts = {
@@ -162,7 +184,7 @@ function M.setup(opts)
     return false, "fzf-lua setup API is not compatible"
   end
 
-  fzf_lua.setup(M.opts(opts))
+  fzf_lua.setup(M.opts(opts), true)
   return true
 end
 
