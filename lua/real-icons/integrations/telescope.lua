@@ -46,8 +46,13 @@ function M.gen_from_file(opts)
 
     entry.display = function(display_entry)
       local display, path_style = base_display(display_entry)
-      local icon = resolver.resolve("file", icon_path(display_entry))
-      local segment = renderer.segment(icon)
+      local path = icon_path(display_entry)
+      if display_entry._real_icons_path ~= path or not display_entry._real_icons_segment then
+        local icon = resolver.resolve("file", path, { is_dir = false })
+        display_entry._real_icons_path = path
+        display_entry._real_icons_segment = renderer.segment(icon)
+      end
+      local segment = display_entry._real_icons_segment
       local prefix = segment.text .. " "
       local style = {
         { { 0, #segment.text }, segment.hl },

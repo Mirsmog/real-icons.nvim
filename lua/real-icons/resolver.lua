@@ -5,6 +5,25 @@ local pack_util = require("real-icons.packs.util")
 local path_util = require("real-icons.path")
 
 local M = {}
+local RESOLVE_CACHE_LIMIT = 8192
+local resolve_cache = {}
+local resolve_cache_count = 0
+
+local lazy_fallback = {}
+
+function lazy_fallback.__index(icon, key)
+  if key ~= "fallback" then
+    return nil
+  end
+
+  local value = fallback.get(rawget(icon, "path"), {
+    category = rawget(icon, "category"),
+    filetype = rawget(icon, "filetype"),
+    is_dir = rawget(icon, "kind") == "directory",
+  })
+  rawset(icon, "fallback", value or false)
+  return value
+end
 
 local category_aliases = {
   dir = "directory",
@@ -130,8 +149,36 @@ local function resolve_override(category, path, opts, is_dir, name, lower_name, 
   return key, nil
 end
 
+local function resolve_cache_key(category, name, opts)
+  if category == "file" and opts.is_dir == nil then
+    return nil
+  end
+
+  return table.concat({
+    opts.pack or config.options.pack or "",
+    category,
+    name,
+    tostring(opts.extension or ""),
+    tostring(opts.filetype or ""),
+    tostring(opts.is_dir),
+    tostring(opts.fallback == false),
+  }, "\31")
+end
+
+local function with_fallback(icon, enabled)
+  if not enabled then
+    return icon
+  end
+  return setmetatable(icon, lazy_fallback)
+end
+
 function M.resolve(category, name, opts)
   category, name, opts = normalize_args(category, name, opts)
+
+  local cache_key = resolve_cache_key(category, name, opts)
+  if cache_key and resolve_cache[cache_key] then
+    return resolve_cache[cache_key]
+  end
 
   local path = name
   local basename = path_util.basename(path)
@@ -204,7 +251,7 @@ function M.resolve(category, name, opts)
     defaulted = true
   end
 
-  return {
+  local icon = with_fallback({
     pack = pack.name,
     key = key,
     category = category,
@@ -214,12 +261,19 @@ function M.resolve(category, name, opts)
     path = path,
     name = basename,
     extension = extension,
+    filetype = opts.filetype,
     is_default = defaulted,
-    fallback = opts.fallback == false and nil or fallback.get(path, {
-      category = category,
-      is_dir = is_dir,
-    }),
-  }
+  }, opts.fallback ~= false)
+
+  if cache_key then
+    if resolve_cache_count >= RESOLVE_CACHE_LIMIT then
+      resolve_cache = {}
+      resolve_cache_count = 0
+    end
+    resolve_cache[cache_key] = icon
+    resolve_cache_count = resolve_cache_count + 1
+  end
+  return icon
 end
 
 function M.categories()
@@ -251,5 +305,10 @@ function M.list(category, opts)
 end
 
 M.normalize_category = normalize_category
+
+function M.clear_cache()
+  resolve_cache = {}
+  resolve_cache_count = 0
+end
 
 return M

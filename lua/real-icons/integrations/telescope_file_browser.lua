@@ -223,8 +223,17 @@ function M.entry_maker(opts)
       prompt_bufnr = get_fb_prompt(deps.state)
     end
 
-    local icon = resolver.resolve(entry.is_dir and "directory" or "file", entry.path)
-    local segment = renderer.segment(icon)
+    if entry._real_icons_path ~= entry.path
+        or entry._real_icons_is_dir ~= entry.is_dir
+        or not entry._real_icons_segment then
+      local icon = resolver.resolve(entry.is_dir and "directory" or "file", entry.path, {
+        is_dir = entry.is_dir,
+      })
+      entry._real_icons_path = entry.path
+      entry._real_icons_is_dir = entry.is_dir
+      entry._real_icons_segment = renderer.segment(icon)
+    end
+    local segment = entry._real_icons_segment
     local display_path = make_display_path(entry, opts, parent_dir, deps)
     local file_width = vim.F.if_nil(opts.file_width, math.max(15, total_file_width))
 

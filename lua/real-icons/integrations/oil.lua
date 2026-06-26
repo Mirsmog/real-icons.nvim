@@ -45,7 +45,9 @@ function M.refresh(bufnr)
     local entry = oil.get_entry_on_line(bufnr, lnum)
     if entry and entry.name and entry.name ~= ".." then
       local is_dir = entry.type == "directory"
-      local icon = resolver.resolve(is_dir and "directory" or "file", join(dir, entry.name))
+      local icon = resolver.resolve(is_dir and "directory" or "file", join(dir, entry.name), {
+        is_dir = is_dir,
+      })
       renderer.render(bufnr, lnum - 1, 0, icon, { priority = 250 })
     end
   end

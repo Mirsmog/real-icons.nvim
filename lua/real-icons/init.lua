@@ -1,5 +1,6 @@
 local config = require("real-icons.config")
 local cache = require("real-icons.cache")
+local fallback = require("real-icons.fallback")
 local log = require("real-icons.log")
 local packs = require("real-icons.packs")
 local renderer = require("real-icons.render.placeholder")
@@ -66,6 +67,8 @@ end
 function M.setup(opts)
   config.setup(opts)
   packs.clear_cache()
+  fallback.clear_cache()
+  resolver.clear_cache()
   backend.clear_uploaded()
   renderer.reset_cache()
   did_setup = true
@@ -225,6 +228,8 @@ function M.use_pack(name, opts)
 
   config.options.pack = name
   packs.clear_cache()
+  fallback.clear_cache()
+  resolver.clear_cache()
   backend.clear_uploaded()
   renderer.reset_cache()
   clear_rendered_icons()

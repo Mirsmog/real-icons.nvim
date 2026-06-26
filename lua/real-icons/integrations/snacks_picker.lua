@@ -47,10 +47,23 @@ function M.icon(item, picker)
   end
 
   local is_dir = item.dir or item.type == "directory"
+  local filetype = item.filetype or item.ft
+  if item._real_icons_path == path
+      and item._real_icons_is_dir == is_dir
+      and item._real_icons_filetype == filetype
+      and item._real_icons_segment then
+    return { item._real_icons_segment.text, item._real_icons_segment.hl, virtual = true }
+  end
+
   local icon = resolver.resolve(is_dir and "directory" or "file", path, {
-    filetype = item.filetype or item.ft,
+    filetype = filetype,
+    is_dir = is_dir,
   })
   local segment = renderer.segment(icon)
+  item._real_icons_path = path
+  item._real_icons_is_dir = is_dir
+  item._real_icons_filetype = filetype
+  item._real_icons_segment = segment
   return { segment.text, segment.hl, virtual = true }
 end
 
