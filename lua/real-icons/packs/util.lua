@@ -2,6 +2,13 @@ local path_util = require("real-icons.path")
 local bit = require("bit")
 
 local M = {}
+local asset_extensions = {
+  jpeg = true,
+  jpg = true,
+  png = true,
+  svg = true,
+  webp = true,
+}
 
 local function path_hash(path)
   local hash = 2166136261
@@ -59,7 +66,11 @@ function M.icon_key(path)
 end
 
 function M.looks_like_asset(value)
-  return type(value) == "string" and value:match("%.(svg|png|jpe?g|webp)$") ~= nil
+  if type(value) ~= "string" then
+    return false
+  end
+  local extension = value:match("%.([^%.]+)$")
+  return extension ~= nil and asset_extensions[extension:lower()] == true
 end
 
 return M
