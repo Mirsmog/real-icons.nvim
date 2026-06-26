@@ -10,7 +10,6 @@ local material = {
   name = "material",
   version = "5.35.0",
   url = "https://registry.npmjs.org/material-icon-theme/-/material-icon-theme-5.35.0.tgz",
-  license = "MIT",
 }
 
 local function pack_root(name)
@@ -29,7 +28,6 @@ local builtin_specs = {
     type = "vscode",
     path = material_root(),
     manifest = "dist/material-icons.json",
-    license = "MIT",
   },
 }
 
@@ -111,6 +109,21 @@ function M.source(name)
     return material
   end
   return spec_for(name)
+end
+
+function M.register(name, spec)
+  name = name and vim.trim(tostring(name)) or ""
+  if name == "" then
+    return false, "pack name is required"
+  end
+  if type(spec) ~= "table" then
+    return false, "pack spec must be a table"
+  end
+
+  config.options.packs[name] = vim.deepcopy(spec)
+  loaded[name] = nil
+  load_errors[name] = nil
+  return true
 end
 
 function M.names()

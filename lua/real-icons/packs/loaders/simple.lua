@@ -48,7 +48,6 @@ function M.load(name, spec)
   return {
     name = name,
     root = root,
-    license = spec.license,
     definitions = definitions,
     file = file_key,
     folder = folder_key,

@@ -69,6 +69,24 @@ vim.api.nvim_create_user_command("RealIconsPacks", function()
   vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "real-icons.nvim" })
 end, {})
 
+vim.api.nvim_create_user_command("RealIconsDiscoverPacks", function()
+  local candidates = real_icons().discover_packs()
+  if #candidates == 0 then
+    vim.notify("No local VS Code icon themes found", vim.log.levels.WARN, { title = "real-icons.nvim" })
+    return
+  end
+
+  local lines = {}
+  for _, candidate in ipairs(candidates) do
+    lines[#lines + 1] = string.format("%s  %s", candidate.name, candidate.label)
+  end
+  vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "real-icons.nvim" })
+end, {})
+
+vim.api.nvim_create_user_command("RealIconsSelectPack", function()
+  real_icons().select_pack()
+end, {})
+
 vim.api.nvim_create_user_command("RealIconsOilEnable", function()
   local ok, err = real_icons().enable_integration("oil")
   if not ok then

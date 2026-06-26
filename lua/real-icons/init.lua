@@ -205,6 +205,20 @@ function M.available_packs()
   return packs.names()
 end
 
+function M.discover_packs(opts)
+  ensure_setup()
+  local candidates = require("real-icons.packs.discovery").discover(opts)
+  for _, candidate in ipairs(candidates) do
+    packs.register(candidate.name, candidate.spec)
+  end
+  return candidates
+end
+
+function M.select_pack()
+  ensure_setup()
+  require("real-icons.ui.select_pack").open()
+end
+
 function M.enable_integration(name)
   ensure_setup()
   if not integration_modules[name] then

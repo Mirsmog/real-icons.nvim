@@ -67,7 +67,6 @@ function M.load(name, spec)
     name = name,
     root = root,
     manifest = manifest_file,
-    license = spec.license,
     definitions = definitions,
     file = manifest.file,
     folder = manifest.folder,

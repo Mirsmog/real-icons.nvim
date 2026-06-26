@@ -240,7 +240,6 @@ require("real-icons").setup({
       type = "vscode",
       path = vim.fn.expand("~/.vscode-oss/extensions/thang-nm.flow-icons-2.0.3"),
       theme = "flow-deep",
-      license = "personal",
     },
   },
 })
@@ -261,6 +260,16 @@ require("real-icons").setup({
   },
 })
 ```
+
+You can also discover and preview local VS Code icon themes from Neovim:
+
+```vim
+:RealIconsSelectPack
+```
+
+The picker scans common VS Code-compatible extension directories, registers
+found icon themes for the current Neovim session, and previews sample file icons
+before switching packs.
 
 ### Simple Local Packs
 
@@ -566,6 +575,8 @@ vim.print(icons.available_packs())
 | `:RealIconsClearCache [name]` | Clear generated PNG cache. |
 | `:RealIconsUsePack [name]` | Switch the active icon pack, or show the current pack. |
 | `:RealIconsPacks` | List configured icon packs. |
+| `:RealIconsDiscoverPacks` | Discover local VS Code-compatible icon themes. |
+| `:RealIconsSelectPack` | Pick and preview an icon pack. |
 | `:RealIconsOilEnable` | Attach the Oil integration to the current buffer. |
 
 ## Troubleshooting

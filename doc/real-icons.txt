@@ -185,7 +185,6 @@ Custom VS Code icon theme:
         type = "vscode",
         path = vim.fn.expand("~/.vscode-oss/extensions/thang-nm.flow-icons-2.0.3"),
         theme = "flow-deep",
-        license = "personal",
       },
     },
   })
@@ -215,6 +214,15 @@ Simple local icon folder:
     },
   })
 <
+
+Discover and preview local VS Code icon themes:
+>
+  :RealIconsSelectPack
+<
+
+The picker scans common VS Code-compatible extension directories, registers
+found icon themes for the current Neovim session, and previews sample file icons
+before switching packs.
 
 Overrides:
 >
@@ -440,6 +448,12 @@ COMMANDS                                                  *real-icons-commands*
 
 :RealIconsPacks
   List configured icon packs.
+
+:RealIconsDiscoverPacks
+  Discover local VS Code-compatible icon themes.
+
+:RealIconsSelectPack
+  Pick and preview an icon pack.
 
 :RealIconsOilEnable
   Attach the Oil integration to the current buffer.

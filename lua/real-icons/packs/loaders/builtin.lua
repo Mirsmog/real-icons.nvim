@@ -8,7 +8,6 @@ function M.load()
   return {
     name = "builtin",
     root = root,
-    license = "MIT",
     definitions = {
       file = path_util.join(assets, "filetypes", "default.png"),
       folder = path_util.join(assets, "folders", "default.png"),
