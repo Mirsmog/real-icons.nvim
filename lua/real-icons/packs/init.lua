@@ -147,6 +147,21 @@ local function run(command)
   return true
 end
 
+local function remove_path(path)
+  if path and path_util.exists(path) then
+    vim.fn.delete(path, "rf")
+  end
+end
+
+local function rename_path(from, to)
+  if vim.fn.rename(from, to) == 0 then
+    return true
+  end
+
+  local err = vim.v.errmsg ~= "" and (": " .. vim.v.errmsg) or ""
+  return false, "unable to rename " .. from .. " to " .. to .. err
+end
+
 function M.install(name, opts)
   opts = opts or {}
   name = name or config.options.pack
@@ -157,27 +172,63 @@ function M.install(name, opts)
   local source = material
   local root = material_root()
   local parent = vim.fs.dirname(root)
-  path_util.ensure_dir(parent)
+  if not path_util.ensure_dir(parent) then
+    return false, "unable to create " .. parent
+  end
 
-  local tmp = vim.fn.tempname()
-  local archive = tmp .. ".tgz"
+  local token = vim.fn.fnamemodify(vim.fn.tempname(), ":t")
+  local archive = path_util.join(parent, ".material-" .. token .. ".tgz")
+  local staging = path_util.join(parent, ".material-" .. token)
+  local backup = path_util.join(parent, ".material-backup-" .. token)
 
   local ok, err = run({ "curl", "-L", "--fail", "-o", archive, source.url })
   if not ok then
+    remove_path(archive)
     return false, err
   end
 
-  vim.fn.delete(root, "rf")
-  path_util.ensure_dir(root)
+  remove_path(staging)
+  if not path_util.ensure_dir(staging) then
+    remove_path(archive)
+    return false, "unable to create " .. staging
+  end
 
-  ok, err = run({ "tar", "-xzf", archive, "--strip-components=1", "-C", root })
+  ok, err = run({ "tar", "-xzf", archive, "--strip-components=1", "-C", staging })
   if not ok then
-    vim.fn.delete(archive)
-    vim.fn.delete(root, "rf")
+    remove_path(archive)
+    remove_path(staging)
     return false, err
   end
 
-  vim.fn.delete(archive)
+  local manifest = path_util.join(staging, "dist", "material-icons.json")
+  if not path_util.exists(manifest) then
+    remove_path(archive)
+    remove_path(staging)
+    return false, "downloaded Material Icon Theme is missing dist/material-icons.json"
+  end
+
+  remove_path(backup)
+  if path_util.exists(root) then
+    ok, err = rename_path(root, backup)
+    if not ok then
+      remove_path(archive)
+      remove_path(staging)
+      return false, err
+    end
+  end
+
+  ok, err = rename_path(staging, root)
+  if not ok then
+    if path_util.exists(backup) then
+      rename_path(backup, root)
+    end
+    remove_path(archive)
+    remove_path(staging)
+    return false, err
+  end
+
+  remove_path(archive)
+  remove_path(backup)
   loaded[name] = nil
 
   if opts.notify ~= false then
