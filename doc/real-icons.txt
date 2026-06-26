@@ -371,18 +371,48 @@ snacks.picker:
 ==============================================================================
 API                                                            *real-icons-api*
 
-Resolve an icon:
+Get an icon:
 >
   local icons = require("real-icons")
-  local icon = icons.get(path, {
-    is_dir = false,
-    filetype = "lua",
-  })
+  local text, hl, is_default, meta = icons.get("file", "init.lua")
+<
+
+The category is explicit by design; path-only shorthand is not supported.
+
+Supported categories:
+>
+  icons.get("file", "init.lua")
+  icons.get("directory", "src")
+  icons.get("extension", "lua")
+  icons.get("filetype", "lua")
+<
+
+icons.icon() and icons.get_icon() are aliases for icons.get().
+
+For text-based hooks, use segment() when width or metadata is needed:
+>
+  local icons = require("real-icons")
+  local segment = icons.segment("file", "init.lua")
+  return segment.text, segment.hl
 <
 
 Render an icon into a buffer-based UI:
 >
+  icons.render(bufnr, row, col, "file", "init.lua")
+<
+
+Advanced integrations can resolve the engine object directly:
+>
+  local icons = require("real-icons")
+  local icon = icons.resolve("file", "init.lua")
   icons.render(bufnr, row, col, icon)
+<
+
+List configured mappings:
+>
+  local icons = require("real-icons")
+  vim.print(icons.categories())
+  vim.print(icons.list("extension"))
 <
 
 Check capabilities:
@@ -400,14 +430,6 @@ Switch icon packs:
   icons.use_pack("material")
   print(icons.pack())
   vim.print(icons.available_packs())
-<
-
-For text-based hooks, use the placeholder segment:
->
-  local renderer = require("real-icons.render.placeholder")
-  local icon = require("real-icons").get(path, { is_dir = false })
-  local segment = renderer.segment(icon)
-  return segment.text, segment.hl
 <
 
 ==============================================================================

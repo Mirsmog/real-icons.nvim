@@ -16,9 +16,8 @@ function M.icon_for_node(node)
     return nil
   end
 
-  local icon = resolver.resolve(node.absolute_path, {
-    is_dir = is_directory_node(node),
-  })
+  local is_dir = is_directory_node(node)
+  local icon = resolver.resolve(is_dir and "directory" or "file", node.absolute_path)
   local segment = renderer.segment(icon)
   return {
     str = segment.text,

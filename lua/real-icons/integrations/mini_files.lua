@@ -10,9 +10,8 @@ function M.prefix(fs_entry)
     return "", ""
   end
 
-  local icon = resolver.resolve(fs_entry.path, {
-    is_dir = fs_entry.fs_type == "directory",
-  })
+  local is_dir = fs_entry.fs_type == "directory"
+  local icon = resolver.resolve(is_dir and "directory" or "file", fs_entry.path)
   local segment = renderer.segment(icon)
   return segment.text .. " ", segment.hl
 end

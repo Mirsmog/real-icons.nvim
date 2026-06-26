@@ -10,6 +10,13 @@ local M = {}
 
 local did_setup = false
 
+local function resolve_icon(category, name, opts)
+  if type(category) == "table" then
+    return category, name or {}
+  end
+  return resolver.resolve(category, name, opts), opts or {}
+end
+
 function M.setup(opts)
   config.setup(opts)
   packs.clear_cache()
@@ -55,18 +62,46 @@ local function ensure_setup()
   end
 end
 
-function M.get(path, opts)
+function M.get(category, name, opts)
   ensure_setup()
-  return resolver.resolve(path, opts)
+  local segment = M.segment(category, name, opts)
+  return segment.text, segment.hl, segment.is_default == true, {
+    width = segment.width,
+    source = segment.source,
+    image = segment.image == true,
+    fallback = segment.fallback == true,
+    icon = segment.icon,
+  }
 end
 
-function M.resolve(path, opts)
-  return M.get(path, opts)
+M.icon = M.get
+M.get_icon = M.get
+
+function M.segment(category, name, opts)
+  ensure_setup()
+  local icon, render_opts = resolve_icon(category, name, opts)
+  return renderer.segment(icon, render_opts)
 end
 
-function M.render(bufnr, row, col, icon, opts)
+function M.resolve(category, name, opts)
   ensure_setup()
+  return resolver.resolve(category, name, opts)
+end
+
+function M.render(bufnr, row, col, category, name, opts)
+  ensure_setup()
+  local icon
+  icon, opts = resolve_icon(category, name, opts)
   return renderer.render(bufnr, row, col, icon, opts)
+end
+
+function M.list(category, opts)
+  ensure_setup()
+  return resolver.list(category, opts)
+end
+
+function M.categories()
+  return resolver.categories()
 end
 
 function M.clear(bufnr)
@@ -254,7 +289,7 @@ function M.demo()
 
   for index, item in ipairs(items) do
     local row = index + 1
-    local icon = resolver.resolve(item[1], { is_dir = item[2] })
+    local icon = resolver.resolve(item[2] and "directory" or "file", item[1])
     renderer.render(bufnr, row, 0, icon)
   end
 end

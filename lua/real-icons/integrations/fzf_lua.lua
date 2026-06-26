@@ -92,9 +92,8 @@ local function with_icon(entry, opts, raw)
   end
 
   local path = entry_path(entry, opts, raw)
-  local icon = resolver.resolve(path, {
-    is_dir = vim.fn.isdirectory(path) == 1,
-  })
+  local is_dir = vim.fn.isdirectory(path) == 1
+  local icon = resolver.resolve(is_dir and "directory" or "file", path)
   local segment = renderer.segment(icon)
   return colorize(segment) .. nbsp() .. entry
 end

@@ -10,9 +10,8 @@ function M.get_element_icon(element)
     return nil
   end
 
-  local icon = resolver.resolve(element.path, {
+  local icon = resolver.resolve(element.directory and "directory" or "file", element.path, {
     filetype = element.filetype,
-    is_dir = element.directory,
   })
   local segment = renderer.segment(icon)
   return segment.text, segment.hl

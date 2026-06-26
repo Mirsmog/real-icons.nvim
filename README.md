@@ -505,24 +505,58 @@ status, and diagnostics.
 
 ## API
 
-Resolve an icon:
+The public API follows the same shape as common Neovim icon providers: pass a
+category and a name, get display text and a highlight group back.
+The category is explicit by design; path-only shorthand is not supported.
 
 ```lua
 local icons = require("real-icons")
 
-local icon = icons.get(path, {
-  is_dir = false,
-  filetype = "lua",
-})
+local text, hl, is_default, meta = icons.get("file", "init.lua")
 ```
 
-Render an icon into a buffer-based UI:
+Supported categories:
 
 ```lua
+icons.get("file", "init.lua")
+icons.get("directory", "src")
+icons.get("extension", "lua")
+icons.get("filetype", "lua")
+```
+
+`icons.icon()` and `icons.get_icon()` are aliases for `icons.get()`.
+
+For text-based plugin hooks such as pickers, statuslines, and tablines, use
+`segment()` when you need width or metadata:
+
+```lua
+local segment = icons.segment("file", "init.lua")
+
+return segment.text, segment.hl
+```
+
+Render an icon into a buffer-based UI with inline virtual text:
+
+```lua
+icons.render(bufnr, row, col, "file", "init.lua")
+```
+
+Advanced integrations can resolve the engine object directly:
+
+```lua
+local icon = icons.resolve("file", "init.lua")
+
 icons.render(bufnr, row, col, icon)
 ```
 
-Check terminal support:
+List configured mappings:
+
+```lua
+vim.print(icons.categories())
+vim.print(icons.list("extension"))
+```
+
+Check terminal support and active capabilities:
 
 ```lua
 local icons = require("real-icons")
@@ -542,17 +576,6 @@ local icons = require("real-icons")
 icons.use_pack("material")
 print(icons.pack())
 vim.print(icons.available_packs())
-```
-
-For text-based plugin hooks such as pickers, statuslines, and tablines, use the
-placeholder segment directly:
-
-```lua
-local renderer = require("real-icons.render.placeholder")
-local icon = require("real-icons").get(path, { is_dir = false })
-local segment = renderer.segment(icon)
-
-return segment.text, segment.hl
 ```
 
 ## Commands

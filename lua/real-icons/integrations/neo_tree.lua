@@ -29,9 +29,7 @@ function M.provider(icon, node)
     return icon
   end
 
-  local resolved = resolver.resolve(path, {
-    is_dir = is_directory(node),
-  })
+  local resolved = resolver.resolve(is_directory(node) and "directory" or "file", path)
   local segment = renderer.segment(resolved)
   return {
     text = segment.text,

@@ -76,9 +76,12 @@ end
 function M.component(opts)
   opts = opts or {}
   local path = opts.path or path_for_current_buffer()
-  local icon = resolver.resolve(path, {
+  local is_dir = opts.is_dir
+  if is_dir == nil then
+    is_dir = vim.fn.isdirectory(path) == 1
+  end
+  local icon = resolver.resolve(is_dir and "directory" or "file", path, {
     filetype = opts.filetype or vim.bo.filetype,
-    is_dir = opts.is_dir or vim.fn.isdirectory(path) == 1,
   })
   local segment = renderer.segment(icon, opts)
   return statusline_hl(segment.hl) .. segment.text .. "%*"

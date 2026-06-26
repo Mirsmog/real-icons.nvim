@@ -46,9 +46,9 @@ function M.icon(item, picker)
     return nil
   end
 
-  local icon = resolver.resolve(path, {
+  local is_dir = item.dir or item.type == "directory"
+  local icon = resolver.resolve(is_dir and "directory" or "file", path, {
     filetype = item.filetype or item.ft,
-    is_dir = item.dir or item.type == "directory",
   })
   local segment = renderer.segment(icon)
   return { segment.text, segment.hl, virtual = true }

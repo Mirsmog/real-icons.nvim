@@ -139,7 +139,7 @@ function M.check()
     h.warn("ImageMagick is not available; SVG icon packs and color transforms cannot be rendered")
   end
 
-  local default_icon = require("real-icons.resolver").resolve("README.md", { is_dir = false })
+  local default_icon = require("real-icons.resolver").resolve("file", "README.md")
   local render_path, cache_err = cache.ensure(default_icon)
   if render_path then
     h.ok("Icon cache is writable")

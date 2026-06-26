@@ -94,6 +94,13 @@ local function segment_key(icon, size, cols, rows, opts)
   }, "|")
 end
 
+local function with_icon_meta(segment, icon)
+  return vim.tbl_extend("force", {}, segment, {
+    icon = icon,
+    is_default = icon.is_default == true,
+  })
+end
+
 function M.placeholder(cols, rows)
   cols, rows = normalize_cells(cols, rows)
   local key = cols .. "x" .. rows
@@ -167,7 +174,7 @@ function M.segment(icon, opts)
   if use_images then
     local key = segment_key(icon, size, cols, rows, opts)
     if segment_cache[key] then
-      return segment_cache[key]
+      return with_icon_meta(segment_cache[key], icon)
     end
 
     local render_path = cache.ensure(icon, { size = size, color = opts.color })
@@ -183,9 +190,12 @@ function M.segment(icon, opts)
           text = M.placeholder(cols, rows)[1],
           hl = hl_for_image(image_id, opts),
           width = cols,
+          source = "image",
+          image = true,
+          fallback = false,
         }
         segment_cache[key] = segment
-        return segment
+        return with_icon_meta(segment, icon)
       end
     end
   end
@@ -195,6 +205,11 @@ function M.segment(icon, opts)
       text = icon.fallback.icon,
       hl = icon.fallback.hl or "Normal",
       width = vim.fn.strdisplaywidth(icon.fallback.icon),
+      source = "fallback",
+      image = false,
+      fallback = true,
+      is_default = icon.is_default == true,
+      icon = icon,
     }
   end
 
@@ -202,6 +217,11 @@ function M.segment(icon, opts)
     text = " ",
     hl = "Normal",
     width = 1,
+    source = "empty",
+    image = false,
+    fallback = true,
+    is_default = true,
+    icon = icon,
   }
 end
 
