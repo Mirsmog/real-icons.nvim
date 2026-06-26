@@ -24,7 +24,6 @@ M.defaults = {
     provider = "auto",
   },
   integrations = {
-    fzf_lua = false,
     bufferline = false,
     lualine = false,
     mini_files = false,

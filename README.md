@@ -85,7 +85,6 @@ bundled icon pack.
 | --- | --- | --- |
 | `telescope.nvim` | supported | automatic |
 | `telescope-file-browser.nvim` | supported | manual entry maker |
-| `fzf-lua` | supported | automatic or manual |
 | `oil.nvim` | supported | automatic |
 | `nvim-tree.lua` | supported | automatic |
 | `neo-tree.nvim` | supported | automatic or manual |
@@ -126,7 +125,6 @@ require("real-icons").setup({
   },
   integrations = {
     bufferline = false,
-    fzf_lua = false,
     lualine = false,
     mini_files = false,
     neo_tree = false,
@@ -347,28 +345,6 @@ require("telescope").setup({
 
 require("telescope").load_extension("file_browser")
 ```
-
-### fzf-lua
-
-Automatic setup:
-
-```lua
-require("real-icons").setup({
-  integrations = {
-    fzf_lua = true,
-  },
-})
-```
-
-Manual setup:
-
-```lua
-require("fzf-lua").setup(require("real-icons.integrations.fzf_lua").opts())
-```
-
-This patches `fzf-lua.devicons`, so real-icons is used by fzf-lua providers
-that already support `file_icons`. When image rendering is unavailable,
-fzf-lua keeps its normal devicons or mini.icons behavior.
 
 ### oil.nvim
 

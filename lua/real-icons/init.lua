@@ -15,7 +15,6 @@ local integration_order = {
   "lualine",
   "telescope",
   "telescope_file_browser",
-  "fzf_lua",
   "mini_files",
   "neo_tree",
   "nvim_tree",
@@ -23,7 +22,6 @@ local integration_order = {
 }
 local integration_modules = {
   bufferline = "real-icons.integrations.bufferline",
-  fzf_lua = "real-icons.integrations.fzf_lua",
   lualine = "real-icons.integrations.lualine",
   mini_files = "real-icons.integrations.mini_files",
   neo_tree = "real-icons.integrations.neo_tree",

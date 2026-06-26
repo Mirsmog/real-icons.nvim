@@ -87,7 +87,6 @@ Full configuration:
     },
     integrations = {
       bufferline = false,
-      fzf_lua = false,
       lualine = false,
       mini_files = false,
       neo_tree = false,
@@ -263,24 +262,6 @@ telescope-file-browser.nvim:
   })
   require("telescope").load_extension("file_browser")
 <
-
-fzf-lua:
->
-  require("real-icons").setup({
-    integrations = {
-      fzf_lua = true,
-    },
-  })
-<
-
-Manual fzf-lua setup:
->
-  require("fzf-lua").setup(require("real-icons.integrations.fzf_lua").opts())
-<
-
-This patches fzf-lua.devicons, so real-icons is used by fzf-lua providers
-that already support file_icons. When image rendering is unavailable,
-fzf-lua keeps its normal devicons or mini.icons behavior.
 
 oil.nvim:
 >
