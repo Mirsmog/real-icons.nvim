@@ -5,7 +5,10 @@ local M = {}
 local uv = vim.uv or vim.loop
 
 local ESC = string.char(27)
-local uploaded = {}
+local IMAGE_ID_BASE = 0x520000
+local IMAGE_ID_RANGE = 0x0fffff
+local uploaded_by_id = {}
+local uploaded_by_path = {}
 local detect_cache
 
 local b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -208,22 +211,62 @@ function M.supports_terminal()
 end
 
 function M.image_id(path)
-  return 0x520000 + (fnv1a(path) % 0x0fffff)
+  return IMAGE_ID_BASE + (fnv1a(path) % IMAGE_ID_RANGE)
+end
+
+local function next_image_id(image_id)
+  if image_id < IMAGE_ID_BASE or image_id >= IMAGE_ID_BASE + IMAGE_ID_RANGE then
+    return IMAGE_ID_BASE
+  end
+  return IMAGE_ID_BASE + ((image_id - IMAGE_ID_BASE + 1) % IMAGE_ID_RANGE)
+end
+
+local function allocate_image_id(path, requested_id)
+  local cached = uploaded_by_path[path]
+  if cached then
+    return cached
+  end
+
+  local image_id = requested_id or M.image_id(path)
+  if image_id < IMAGE_ID_BASE or image_id >= IMAGE_ID_BASE + IMAGE_ID_RANGE then
+    image_id = M.image_id(path)
+  end
+  local first_id = image_id
+  repeat
+    local owner = uploaded_by_id[image_id]
+    if owner == nil or owner == path then
+      return image_id
+    end
+    image_id = next_image_id(image_id)
+  until image_id == first_id
+
+  return nil, "no available Kitty image ids"
 end
 
 function M.upload(icon, opts)
   opts = opts or {}
-  local image_id = opts.image_id or M.image_id(icon.asset)
+  local asset = icon.asset
   local size = opts.size or config.options.size
   local cols = opts.cols or size.cols
   local rows = opts.rows or size.rows
 
-  if uploaded[image_id] then
+  if not asset then
+    return nil, "asset does not exist: " .. tostring(asset)
+  end
+
+  local image_id = uploaded_by_path[asset]
+  if image_id then
     return image_id
   end
 
-  if not icon.asset or not uv.fs_stat(icon.asset) then
-    return nil, "asset does not exist: " .. tostring(icon.asset)
+  if not uv.fs_stat(asset) then
+    return nil, "asset does not exist: " .. tostring(asset)
+  end
+
+  local alloc_err
+  image_id, alloc_err = allocate_image_id(asset, opts.image_id)
+  if not image_id then
+    return nil, alloc_err
   end
 
   local control = table.concat({
@@ -237,13 +280,15 @@ function M.upload(icon, opts)
     "r=" .. rows,
   }, ",")
 
-  command(control, base64(icon.asset))
-  uploaded[image_id] = true
+  command(control, base64(asset))
+  uploaded_by_id[image_id] = asset
+  uploaded_by_path[asset] = image_id
   return image_id
 end
 
 function M.clear_uploaded()
-  uploaded = {}
+  uploaded_by_id = {}
+  uploaded_by_path = {}
   detect_cache = nil
 end
 
