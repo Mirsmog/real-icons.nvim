@@ -101,6 +101,39 @@ local function with_icon_meta(segment, icon)
   })
 end
 
+local function image_segment(icon, size, cols, rows, opts)
+  local key = segment_key(icon, size, cols, rows, opts)
+  if segment_cache[key] then
+    return segment_cache[key]
+  end
+
+  local render_path, cache_err = cache.ensure(icon, { size = size, color = opts.color })
+  if not render_path then
+    return nil, cache_err
+  end
+
+  local render_icon = vim.tbl_extend("force", icon, { asset = render_path })
+  local image_id, upload_err = backend.upload(render_icon, {
+    cols = cols,
+    rows = rows,
+    size = size,
+  })
+  if not image_id then
+    return nil, upload_err or cache_err
+  end
+
+  local segment = {
+    text = M.placeholder(cols, rows)[1],
+    hl = hl_for_image(image_id, opts),
+    width = cols,
+    source = "image",
+    image = true,
+    fallback = false,
+  }
+  segment_cache[key] = segment
+  return segment
+end
+
 function M.placeholder(cols, rows)
   cols, rows = normalize_cells(cols, rows)
   local key = cols .. "x" .. rows
@@ -130,27 +163,15 @@ function M.render(bufnr, row, col, icon, opts)
   local use_images = opts.image ~= false and backend.supports_terminal() and vim.o.termguicolors
 
   if use_images then
-    local render_path, cache_err = cache.ensure(icon, { size = size, color = opts.color })
-    if render_path then
-      icon = vim.tbl_extend("force", icon, { asset = render_path })
-
-      local image_id, err = backend.upload(icon, {
-        cols = cols,
-        rows = rows,
-        size = size,
+    local segment, err = image_segment(icon, size, cols, rows, opts)
+    if segment then
+      return vim.api.nvim_buf_set_extmark(bufnr, M.ns, row, col, {
+        virt_text = { { segment.text .. " ", segment.hl } },
+        virt_text_pos = "inline",
+        priority = opts.priority or 200,
       })
-      if image_id then
-        local lines = M.placeholder(cols, rows)
-        return vim.api.nvim_buf_set_extmark(bufnr, M.ns, row, col, {
-          virt_text = { { lines[1] .. " ", hl_for_image(image_id) } },
-          virt_text_pos = "inline",
-          priority = opts.priority or 200,
-        })
-      elseif not config.options.fallback.enabled then
-        error(err or cache_err)
-      end
     elseif not config.options.fallback.enabled then
-      error(cache_err)
+      error(err or "failed to render icon")
     end
   end
 
@@ -172,31 +193,9 @@ function M.segment(icon, opts)
   local use_images = opts.image ~= false and backend.supports_terminal() and vim.o.termguicolors
 
   if use_images then
-    local key = segment_key(icon, size, cols, rows, opts)
-    if segment_cache[key] then
-      return with_icon_meta(segment_cache[key], icon)
-    end
-
-    local render_path = cache.ensure(icon, { size = size, color = opts.color })
-    if render_path then
-      local render_icon = vim.tbl_extend("force", icon, { asset = render_path })
-      local image_id = backend.upload(render_icon, {
-        cols = cols,
-        rows = rows,
-        size = size,
-      })
-      if image_id then
-        local segment = {
-          text = M.placeholder(cols, rows)[1],
-          hl = hl_for_image(image_id, opts),
-          width = cols,
-          source = "image",
-          image = true,
-          fallback = false,
-        }
-        segment_cache[key] = segment
-        return with_icon_meta(segment, icon)
-      end
+    local segment = image_segment(icon, size, cols, rows, opts)
+    if segment then
+      return with_icon_meta(segment, icon)
     end
   end
 
