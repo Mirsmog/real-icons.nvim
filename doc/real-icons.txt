@@ -278,6 +278,10 @@ Manual fzf-lua setup:
   require("fzf-lua").setup(require("real-icons.integrations.fzf_lua").opts())
 <
 
+This patches fzf-lua.devicons, so real-icons is used by fzf-lua providers
+that already support file_icons. When image rendering is unavailable,
+fzf-lua keeps its normal devicons or mini.icons behavior.
+
 oil.nvim:
 >
   require("real-icons").setup({

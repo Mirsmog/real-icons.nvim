@@ -1,168 +1,240 @@
+local backend = require("real-icons.backend.kitty")
+local cache = require("real-icons.cache")
+local config = require("real-icons.config")
+local packs = require("real-icons.packs")
 local renderer = require("real-icons.render.placeholder")
 local resolver = require("real-icons.resolver")
 
 local M = {}
 
-local ESC = string.char(27)
-local RESET = ESC .. "[0m"
+local state_cache = {}
+local originals = {}
 
-local function fzf_utils()
-  local ok, utils = pcall(require, "fzf-lua.utils")
-  if ok then
-    return utils
+local function table_count(tbl)
+  local count = 0
+  for _ in pairs(tbl or {}) do
+    count = count + 1
   end
+  return count
 end
 
-local function nbsp()
-  local utils = fzf_utils()
-  return utils and utils.nbsp or vim.fn.nr2char(0x2002)
-end
-
-local function strip_ansi(value)
-  local utils = fzf_utils()
-  if utils then
-    return utils.strip_ansi_coloring(value)
+local function normalize_key(value)
+  if type(value) == "table" then
+    return value.icon or value.name
   end
-  return value:gsub("[\27\155][][()#;?%d]*[A-PRZcf-ntqry=><~]", "")
+  return value
 end
 
-local function hl_fg(name)
-  if not name or name == "" then
+local function icon_entry(category, name)
+  local ok_icon, icon = pcall(resolver.resolve, category, name, { fallback = false })
+  if not ok_icon or type(icon) ~= "table" then
     return nil
   end
 
-  local ok, hl = pcall(vim.api.nvim_get_hl, 0, {
-    name = name,
+  local ok_segment, segment = pcall(renderer.segment, icon)
+  if not ok_segment or type(segment) ~= "table" or segment.source ~= "image" then
+    return nil
+  end
+
+  local ok_hl, hl = pcall(vim.api.nvim_get_hl, 0, {
+    name = segment.hl,
     link = false,
   })
-  if not ok or not hl or not hl.fg then
+  if not ok_hl or type(hl) ~= "table" or not hl.fg then
     return nil
   end
 
-  return hl.fg
+  return {
+    icon = segment.text,
+    color = string.format("#%06x", hl.fg),
+  }
 end
 
-local function ansi_fg(color)
-  if not color then
+local function last_extension(ext)
+  return ext:match("([^.]+)$")
+end
+
+local function add_extension(state, ext, entry)
+  ext = tostring(ext or ""):gsub("^%.+", ""):lower()
+  if ext == "" or not entry then
+    return
+  end
+
+  if ext:find(".", 1, true) then
+    state.icons.by_ext_2part[ext] = entry
+    local tail = last_extension(ext)
+    if tail then
+      state.icons.ext_has_2part[tail] = true
+    end
+  else
+    state.icons.by_ext[ext] = entry
+  end
+end
+
+local function state_key(pack, opts)
+  local size = config.options.size or {}
+  opts = opts or {}
+  return table.concat({
+    pack.name or "",
+    vim.o.background or "",
+    tostring(vim.o.termguicolors),
+    tostring(size.cols or ""),
+    tostring(size.rows or ""),
+    vim.inspect(size.pixels or ""),
+    tostring(size.padding or ""),
+    tostring(size.trim ~= false),
+    cache.color_key(config.options.color),
+    tostring(opts.icon_padding or ""),
+  }, "|")
+end
+
+local function add_map(target, source, category, entry_cache, normalize)
+  for name, value in pairs(source or {}) do
+    local key = normalize_key(value)
+    if key then
+      local entry = entry_cache[key]
+      if entry == nil then
+        entry = icon_entry(category, name)
+        entry_cache[key] = entry or false
+      end
+      if entry then
+        target[normalize and normalize(name) or name] = entry
+      end
+    end
+  end
+end
+
+local function build_state(opts)
+  opts = opts or {}
+  if not vim.o.termguicolors or not backend.supports_terminal() then
     return nil
   end
 
-  local r = math.floor(color / 0x10000) % 0x100
-  local g = math.floor(color / 0x100) % 0x100
-  local b = color % 0x100
-  return string.format("%s[38;2;%d;%d;%dm", ESC, r, g, b)
-end
-
-local function colorize(segment)
-  local prefix = ansi_fg(hl_fg(segment.hl))
-  if not prefix then
-    return segment.text
+  local pack = packs.get()
+  local key = state_key(pack, opts)
+  if state_cache[key] then
+    return state_cache[key]
   end
-  return prefix .. segment.text .. RESET
-end
 
-local function copy_entry_opts(opts)
-  local entry_opts = vim.tbl_deep_extend("force", {}, opts or {})
-  entry_opts.file_icons = false
-  entry_opts.color_icons = false
-  entry_opts._fzf_nth_devicons = false
-  return entry_opts
-end
+  local default_icon = icon_entry("file", "")
+  local dir_icon = icon_entry("directory", "")
+  if not default_icon or not dir_icon then
+    return nil
+  end
 
-local function entry_path(entry, opts, fallback)
-  local ok, path_mod = pcall(require, "fzf-lua.path")
-  if ok then
-    local parsed_ok, parsed = pcall(path_mod.entry_to_file, entry, opts or {})
-    if parsed_ok and parsed and parsed.path and parsed.path ~= "" then
-      return parsed.path
+  local state = {
+    icon_padding = type(opts.icon_padding) == "string" and opts.icon_padding or nil,
+    dir_icon = dir_icon,
+    default_icon = default_icon,
+    icons = {
+      by_filename_case_sensitive = false,
+      by_filename = {},
+      by_filetype = {},
+      by_ext = {},
+      by_ext_2part = {},
+      ext_has_2part = {},
+    },
+    bg = vim.o.bg,
+    termguicolors = vim.o.termguicolors,
+    real_icons = {
+      pack = pack.name,
+      files = table_count(pack.file_names),
+      extensions = table_count(pack.file_extensions),
+      filetypes = table_count(pack.language_ids),
+    },
+  }
+
+  local entries = {}
+
+  add_map(state.icons.by_filename, pack.file_names, "file", entries, function(name)
+    return tostring(name):lower()
+  end)
+
+  for ext, value in pairs(pack.file_extensions or {}) do
+    local key_name = normalize_key(value)
+    if key_name then
+      local entry = entries[key_name]
+      if entry == nil then
+        entry = icon_entry("extension", ext)
+        entries[key_name] = entry or false
+      end
+      add_extension(state, ext, entry)
     end
   end
 
-  local file_part = strip_ansi(fallback or entry or "")
-  local colon = file_part:find(":", 1, true)
-  if colon and colon > 1 then
-    file_part = file_part:sub(1, colon - 1)
-  end
-  return file_part
+  add_map(state.icons.by_filetype, pack.language_ids, "filetype", entries)
+
+  state_cache[key] = state
+  return state
 end
 
-local function with_icon(entry, opts, raw)
-  if not entry or entry == "" then
-    return entry
-  end
-
-  local path = entry_path(entry, opts, raw)
-  local is_dir = vim.fn.isdirectory(path) == 1
-  local icon = resolver.resolve(is_dir and "directory" or "file", path)
-  local segment = renderer.segment(icon)
-  return colorize(segment) .. nbsp() .. entry
+local function clear_state_cache()
+  state_cache = {}
 end
 
-function M.transform(line, opts)
-  local ok, make_entry = pcall(require, "fzf-lua.make_entry")
-  if not ok then
-    return line
+local function load_real_icons(devicons, opts)
+  local state = build_state(opts)
+  if not state then
+    return false
   end
 
-  local entry = make_entry.file(line, copy_entry_opts(opts))
-  return with_icon(entry, opts, line)
+  devicons.set_state(nil, state)
+  return true
 end
 
-function M.preprocess(opts)
-  local ok, make_entry = pcall(require, "fzf-lua.make_entry")
-  if not ok then
-    return opts
+local function patch_devicons(devicons)
+  if devicons._real_icons_patched then
+    return true
   end
-  return make_entry.preprocess(copy_entry_opts(opts))
-end
+  if type(devicons.load) ~= "function" or type(devicons.set_state) ~= "function" then
+    return false, "fzf-lua devicons API is not compatible"
+  end
 
-local function file_opts(extra)
-  local opts = {
-    file_icons = false,
-    color_icons = false,
-    multiprocess = false,
-    fn_transform = [[return require("real-icons.integrations.fzf_lua").transform]],
-    fn_preprocess = [[return require("real-icons.integrations.fzf_lua").preprocess]],
-    fzf_opts = {
-      ["--ansi"] = true,
-      ["--delimiter"] = string.format("[%s]", nbsp()),
-      ["--nth"] = "-1..",
-    },
-    _fzf_nth_devicons = false,
-  }
+  originals.load = devicons.load
+  originals.unload = devicons.unload
 
-  return vim.tbl_deep_extend("force", opts, extra or {})
+  devicons.load = function(opts)
+    opts = opts or {}
+    local original_ok = originals.load(opts)
+    local real_ok = load_real_icons(devicons, opts)
+    return real_ok or original_ok
+  end
+
+  if type(devicons.unload) == "function" then
+    devicons.unload = function(...)
+      clear_state_cache()
+      return originals.unload(...)
+    end
+  end
+
+  devicons._real_icons_patched = true
+
+  vim.api.nvim_create_autocmd({ "ColorScheme" }, {
+    group = vim.api.nvim_create_augroup("RealIconsFzfLua", { clear = true }),
+    callback = clear_state_cache,
+  })
+
+  vim.api.nvim_create_autocmd("User", {
+    group = "RealIconsFzfLua",
+    pattern = "RealIconsPackChanged",
+    callback = clear_state_cache,
+  })
+
+  return true
 end
 
 function M.opts(opts)
-  opts = opts or {}
-  local shared = file_opts(opts.files)
-
-  return {
-    files = vim.deepcopy(shared),
-    oldfiles = file_opts(opts.oldfiles),
-    history = file_opts(opts.history),
-    args = file_opts(opts.args),
-    complete_file = file_opts(opts.complete_file),
-    git = {
-      files = file_opts(opts.git_files or (opts.git and opts.git.files)),
-      diff = file_opts(opts.git_diff or (opts.git and opts.git.diff)),
-    },
-  }
+  M.setup()
+  return opts or {}
 end
 
-function M.setup(opts)
-  local ok, fzf_lua = pcall(require, "fzf-lua")
+function M.setup()
+  local ok, devicons = pcall(require, "fzf-lua.devicons")
   if not ok then
     return false, "fzf-lua is not available"
   end
 
-  if type(fzf_lua.setup) ~= "function" then
-    return false, "fzf-lua setup API is not compatible"
-  end
-
-  fzf_lua.setup(M.opts(opts))
-  return true
+  return patch_devicons(devicons)
 end
 
 return M
