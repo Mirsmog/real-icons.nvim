@@ -9,12 +9,60 @@ local backend = require("real-icons.backend.kitty")
 local M = {}
 
 local did_setup = false
+local integration_order = {
+  "oil",
+  "bufferline",
+  "lualine",
+  "telescope",
+  "telescope_file_browser",
+  "fzf_lua",
+  "mini_files",
+  "neo_tree",
+  "nvim_tree",
+  "snacks_picker",
+}
+local integration_modules = {
+  bufferline = "real-icons.integrations.bufferline",
+  fzf_lua = "real-icons.integrations.fzf_lua",
+  lualine = "real-icons.integrations.lualine",
+  mini_files = "real-icons.integrations.mini_files",
+  neo_tree = "real-icons.integrations.neo_tree",
+  nvim_tree = "real-icons.integrations.nvim_tree",
+  oil = "real-icons.integrations.oil",
+  snacks_picker = "real-icons.integrations.snacks_picker",
+  telescope = "real-icons.integrations.telescope",
+  telescope_file_browser = "real-icons.integrations.telescope_file_browser",
+}
 
 local function resolve_icon(category, name, opts)
   if type(category) == "table" then
     return category, name or {}
   end
   return resolver.resolve(category, name, opts), opts or {}
+end
+
+local function setup_integration(name)
+  local module = integration_modules[name]
+  if not module then
+    return false, "unknown integration: " .. tostring(name)
+  end
+
+  local ok, integration = pcall(require, module)
+  if not ok then
+    return false, integration
+  end
+  if type(integration.setup) ~= "function" then
+    return true
+  end
+
+  local setup_ok, result, err = pcall(integration.setup)
+  if not setup_ok then
+    return false, result
+  end
+  if result == false then
+    return false, err
+  end
+  return true
 end
 
 function M.setup(opts)
@@ -24,35 +72,10 @@ function M.setup(opts)
   renderer.reset_cache()
   did_setup = true
 
-  if config.options.integrations.oil then
-    require("real-icons.integrations.oil").setup()
-  end
-  if config.options.integrations.bufferline then
-    require("real-icons.integrations.bufferline").setup()
-  end
-  if config.options.integrations.lualine then
-    require("real-icons.integrations.lualine").setup()
-  end
-  if config.options.integrations.telescope then
-    require("real-icons.integrations.telescope").setup()
-  end
-  if config.options.integrations.telescope_file_browser then
-    require("real-icons.integrations.telescope_file_browser").setup()
-  end
-  if config.options.integrations.fzf_lua then
-    require("real-icons.integrations.fzf_lua").setup()
-  end
-  if config.options.integrations.mini_files then
-    require("real-icons.integrations.mini_files").setup()
-  end
-  if config.options.integrations.neo_tree then
-    require("real-icons.integrations.neo_tree").setup()
-  end
-  if config.options.integrations.nvim_tree then
-    require("real-icons.integrations.nvim_tree").setup()
-  end
-  if config.options.integrations.snacks_picker then
-    require("real-icons.integrations.snacks_picker").setup()
+  for _, name in ipairs(integration_order) do
+    if config.options.integrations[name] then
+      setup_integration(name)
+    end
   end
 end
 
@@ -179,6 +202,15 @@ end
 function M.available_packs()
   ensure_setup()
   return packs.names()
+end
+
+function M.enable_integration(name)
+  ensure_setup()
+  if not integration_modules[name] then
+    return false, "unknown integration: " .. tostring(name)
+  end
+  config.enable_integration(name)
+  return setup_integration(name)
 end
 
 function M.use_pack(name, opts)

@@ -44,4 +44,10 @@ function M.setup(opts)
   return M.options
 end
 
+function M.enable_integration(name)
+  M.options.integrations = M.options.integrations or {}
+  M.options.integrations[name] = true
+  return M.options
+end
+
 return M

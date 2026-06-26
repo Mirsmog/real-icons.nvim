@@ -70,6 +70,10 @@ vim.api.nvim_create_user_command("RealIconsPacks", function()
 end, {})
 
 vim.api.nvim_create_user_command("RealIconsOilEnable", function()
-  real_icons().setup({ integrations = { oil = true } })
+  local ok, err = real_icons().enable_integration("oil")
+  if not ok then
+    vim.notify(err, vim.log.levels.ERROR, { title = "real-icons.nvim" })
+    return
+  end
   require("real-icons.integrations.oil").attach_current()
 end, {})
