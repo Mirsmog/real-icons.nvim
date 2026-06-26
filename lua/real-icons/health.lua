@@ -3,6 +3,7 @@ local backend = require("real-icons.backend.kitty")
 local cache = require("real-icons.cache")
 local config = require("real-icons.config")
 local packs = require("real-icons.packs")
+local path_util = require("real-icons.path")
 
 local M = {}
 
@@ -42,6 +43,25 @@ local function health()
     error = vim.fn["health#report_error"],
     info = vim.fn["health#report_info"],
   }
+end
+
+local function cache_writable()
+  local dir = cache.root()
+  if not path_util.ensure_dir(dir) then
+    return false, "unable to create " .. dir
+  end
+
+  local probe = path_util.join(dir, ".healthcheck")
+  local ok, result = pcall(vim.fn.writefile, { "ok" }, probe)
+  if not ok then
+    return false, result
+  end
+  if result ~= 0 then
+    return false, "writefile returned " .. tostring(result)
+  end
+
+  vim.fn.delete(probe)
+  return true
 end
 
 function M.check()
@@ -139,12 +159,19 @@ function M.check()
     h.warn("ImageMagick is not available; SVG icon packs and color transforms cannot be rendered")
   end
 
+  local writable, writable_err = cache_writable()
+  if writable then
+    h.ok("Icon cache is writable")
+  else
+    h.warn("Icon cache is not writable: " .. (writable_err or "unknown error"))
+  end
+
   local default_icon = require("real-icons.resolver").resolve("file", "README.md")
   local render_path, cache_err = cache.ensure(default_icon)
   if render_path then
-    h.ok("Icon cache is writable")
+    h.ok("Sample icon can be prepared")
   else
-    h.warn("Icon cache is not ready: " .. (cache_err or "unknown error"))
+    h.warn("Sample icon cannot be prepared: " .. (cache_err or "unknown error"))
   end
 
   if assets.exists(assets.file("filetypes", "default")) then
