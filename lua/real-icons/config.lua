@@ -4,6 +4,9 @@ M.defaults = {
   pack = "material",
   packs = {},
   overrides = {},
+  rules = {
+    directories = {},
+  },
   backend = "auto",
   size = {
     cols = 2,
@@ -41,7 +44,9 @@ M.defaults = {
 M.options = vim.deepcopy(M.defaults)
 
 function M.setup(opts)
-  M.options = vim.tbl_deep_extend("force", vim.deepcopy(M.defaults), opts or {})
+  local options = vim.tbl_deep_extend("force", vim.deepcopy(M.defaults), opts or {})
+  require("real-icons.rules").validate(options.rules)
+  M.options = options
   return M.options
 end
 

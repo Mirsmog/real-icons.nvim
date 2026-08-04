@@ -66,6 +66,9 @@ Full configuration:
     pack = "material",
     packs = {},
     overrides = {},
+    rules = {
+      directories = {},
+    },
     backend = "auto",
     size = {
       cols = 2,
@@ -255,6 +258,26 @@ Overrides:
     },
   })
 <
+
+Directory path rules:
+>
+  require("real-icons").setup({
+    rules = {
+      directories = {
+        {
+          glob = "**/src/*/scala/**",
+          icon = "folder-packages",
+        },
+      },
+    },
+  })
+<
+
+Directory rules match normalized full paths and are evaluated in order. The
+first match with an icon available in the active pack wins. * matches within
+one path segment and ** can cross path separators. Exact folder overrides take
+precedence. If a rule icon is unavailable, normal folder resolution continues.
+The icon value may also be a path to a PNG or SVG file.
 
 ==============================================================================
 INTEGRATIONS                                        *real-icons-integrations*

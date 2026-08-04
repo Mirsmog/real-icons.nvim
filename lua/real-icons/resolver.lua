@@ -3,6 +3,7 @@ local fallback = require("real-icons.fallback")
 local packs = require("real-icons.packs")
 local pack_util = require("real-icons.packs.util")
 local path_util = require("real-icons.path")
+local rules = require("real-icons.rules")
 
 local M = {}
 local RESOLVE_CACHE_LIMIT = 8192
@@ -122,8 +123,7 @@ local function override_source(value, definitions)
   return value, nil
 end
 
-local function resolve_override(category, path, opts, is_dir, name, lower_name, extension)
-  local maps = override_maps()
+local function resolve_override(category, path, opts, is_dir, name, lower_name, extension, maps)
   local value
 
   if category == "directory" or is_dir then
@@ -206,9 +206,29 @@ function M.resolve(category, name, opts)
   local folder_names = pack.folder_names or {}
   local language_ids = pack.language_ids or {}
   local defaulted = false
-  local key, source = resolve_override(category, path, opts, is_dir, basename, lower_name, extension)
+  local maps = override_maps()
+  local key, source = resolve_override(
+    category,
+    path,
+    opts,
+    is_dir,
+    basename,
+    lower_name,
+    extension,
+    maps
+  )
 
   if category == "directory" or is_dir then
+    if not key and rules.has_directory_rules(config.options.rules) then
+      rules.match_directory(path, config.options.rules, function(rule_value)
+        local rule_key, rule_source = override_source(rule_value, maps.definitions)
+        if rule_source or definitions[rule_key] then
+          key, source = rule_key, rule_source
+          return true
+        end
+        return false
+      end)
+    end
     key = key or normalize_key(folder_names[lower_name] or folder_names[basename])
     if not key then
       key = normalize_key(pack.folder)

@@ -115,6 +115,9 @@ require("real-icons").setup({
   pack = "material",
   packs = {},
   overrides = {},
+  rules = {
+    directories = {},
+  },
   backend = "auto",
   size = {
     cols = 2,
@@ -338,6 +341,37 @@ require("real-icons").setup({
   },
 })
 ```
+
+### Directory Path Rules
+
+Directory rules select icons from normalized full paths instead of hardcoding
+language or framework behavior in the resolver. Rules are evaluated in order,
+and the first match with an icon available in the active pack wins.
+
+For example, show the Material Icon Theme package folder for directories below
+a conventional Scala source root:
+
+```lua
+require("real-icons").setup({
+  rules = {
+    directories = {
+      {
+        glob = "**/src/*/scala/**",
+        icon = "folder-packages",
+      },
+    },
+  },
+})
+```
+
+`*` matches within one path segment and `**` can cross path separators. Exact
+folder overrides take precedence over rules. If the selected icon is not
+defined by the active pack, normal folder-name and default-folder resolution
+continues. `icon` may also be an absolute or relative path to a PNG or SVG.
+
+Integrations pass full paths automatically. Direct calls to
+`resolve("directory", path)` should also pass a full or project-relative path
+when path rules are configured.
 
 ## Integrations
 

@@ -76,6 +76,7 @@ test("default configuration", function()
   assert_equal(config.options.size.density, "auto", "default density")
   assert_equal(config.options.size.oversample, 1.25, "default oversample")
   assert_equal(config.options.size.cols, 2, "default columns")
+  assert_equal(#config.options.rules.directories, 0, "default directory rules")
 end)
 
 test("builtin icon resolution and public API", function()
@@ -94,6 +95,119 @@ test("builtin icon resolution and public API", function()
   assert_true(vim.tbl_contains(icons.categories(), "directory"), "directory category")
   assert_true(vim.tbl_contains(icons.list("extension"), "lua"), "lua extension")
   assert_equal(vim.fn.exists(":RealIconsBuildCache"), 2, "plugin command")
+end)
+
+test("directory rules match full paths with stable precedence", function()
+  local icons = require("real-icons")
+  local scala_rule = {
+    glob = "**/src/*/scala/**",
+    icon = "folder-test",
+  }
+
+  icons.setup({
+    pack = "builtin",
+    backend = "disabled",
+    overrides = {
+      folder_names = {
+        chapter1 = "folder-src",
+        scala = "folder-src",
+      },
+    },
+    rules = {
+      directories = {
+        scala_rule,
+        { glob = "**/src/*/scala/**", icon = "folder-src" },
+      },
+    },
+  })
+
+  assert_equal(
+    icons.resolve("directory", "/project/src/main/scala/chapter1").key,
+    "folder-src",
+    "exact override should win"
+  )
+  assert_equal(
+    icons.resolve("directory", "/project/src/main/scala/chapter2").key,
+    "folder-test",
+    "first matching rule should win"
+  )
+  assert_equal(
+    icons.resolve("directory", "module/src/test/scala/com/example").key,
+    "folder-test",
+    "nested relative package path"
+  )
+  assert_equal(
+    icons.resolve("directory", [[C:\project\src\it\scala\example]]).key,
+    "folder-test",
+    "Windows path separators"
+  )
+  assert_equal(
+    icons.resolve("directory", "/project/src/main/scala").key,
+    "folder-src",
+    "source root should use its name mapping"
+  )
+  assert_equal(
+    icons.resolve("directory", "/project/chapter2").key,
+    "folder",
+    "unrelated directory should not match"
+  )
+
+  icons.setup({
+    pack = "builtin",
+    backend = "disabled",
+    rules = {
+      directories = {
+        { glob = "**/src/*/scala/**", icon = "not-in-this-pack" },
+        { glob = "**/src/*/scala/**", icon = "folder-src" },
+      },
+    },
+  })
+  assert_equal(
+    icons.resolve("directory", "/project/src/main/scala/chapter1").key,
+    "folder-src",
+    "missing rule icon should continue to the next rule"
+  )
+
+  icons.setup({
+    pack = "builtin",
+    backend = "disabled",
+    rules = {
+      directories = {
+        { glob = "**/src/*/scala/**", icon = "not-in-this-pack" },
+      },
+    },
+  })
+  assert_equal(
+    icons.resolve("directory", "/project/src/main/scala/test").key,
+    "folder-test",
+    "missing rule icons should continue normal resolution"
+  )
+  assert_true(
+    icons.resolve("directory", "/project/src/main/scala/chapter1").is_default,
+    "missing rule icon should use the default folder"
+  )
+
+  local custom_source = require("real-icons.assets").file("folders", "src")
+  icons.setup({
+    pack = "builtin",
+    backend = "disabled",
+    rules = {
+      directories = {
+        { glob = "**/generated/**", icon = custom_source },
+      },
+    },
+  })
+  local custom = icons.resolve("directory", "/project/generated/client")
+  assert_equal(custom.source, custom_source, "rule should accept a direct asset path")
+  assert_true(custom.key:match("^override%-") ~= nil, "direct asset rule key")
+
+  local config = require("real-icons.config")
+  local previous = config.options
+  local ok = pcall(config.setup, {
+    rules = { directories = { { glob = "", icon = "folder-test" } } },
+  })
+  assert_equal(ok, false, "invalid directory rule should fail during setup")
+  assert_equal(config.options, previous, "failed setup should preserve configuration")
 end)
 
 test("adaptive SVG density", function()
