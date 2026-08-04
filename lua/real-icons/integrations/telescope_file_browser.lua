@@ -31,11 +31,12 @@ local function selected_icon_hl(base_hl)
     return nil
   end
 
+  local selection = vim.api.nvim_get_hl(0, { name = "TelescopeSelection", link = false })
   local normal = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
   local name = base_hl .. "Selected"
   vim.api.nvim_set_hl(0, name, {
     fg = color(icon_hl.fg),
-    bg = color(normal.bg),
+    bg = color(selection.bg or normal.bg),
   })
   overlay_hl_cache[base_hl] = name
   return name
@@ -78,7 +79,7 @@ end
 
 local function patch_telescope_highlighter()
   if patched_highlighter then
-    return
+    return true
   end
 
   if not color_autocmd then
@@ -92,18 +93,18 @@ local function patch_telescope_highlighter()
   end
 
   local ok, highlights = pcall(require, "telescope.pickers.highlights")
-  if not ok or type(highlights.new) ~= "function" or highlights._real_icons_patched then
+  if not ok or type(highlights.new) ~= "function" then
+    return false
+  end
+  if highlights._real_icons_patched then
     patched_highlighter = true
-    return
+    return true
   end
 
   local original_new = highlights.new
   highlights.new = function(...)
     local highlighter = original_new(...)
-    if type(highlighter) ~= "table" then
-      return highlighter
-    end
-    if highlighter._real_icons_patched then
+    if type(highlighter) ~= "table" or highlighter._real_icons_patched then
       return highlighter
     end
 
@@ -122,11 +123,14 @@ local function patch_telescope_highlighter()
 
   highlights._real_icons_patched = true
   patched_highlighter = true
+  return true
 end
 
 local function get_fb_prompt(state)
-  local existing_prompt_bufnrs = state.get_existing_prompt_bufnrs and state.get_existing_prompt_bufnrs() or {}
-  for _, prompt_bufnr in ipairs(existing_prompt_bufnrs) do
+  local existing = type(state.get_existing_prompt_bufnrs) == "function"
+      and state.get_existing_prompt_bufnrs()
+    or {}
+  for _, prompt_bufnr in ipairs(existing) do
     local status = state.get_status(prompt_bufnr)
     local picker = status and status.picker
     if picker and picker.finder and picker.finder._browse_files then
@@ -134,226 +138,129 @@ local function get_fb_prompt(state)
     end
   end
 
-  local prompt_bufnrs = vim.tbl_filter(function(bufnr)
-    return vim.api.nvim_buf_is_loaded(bufnr) and vim.bo[bufnr].filetype == "TelescopePrompt"
-  end, vim.api.nvim_list_bufs())
-
-  return prompt_bufnrs[1]
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(bufnr) and vim.bo[bufnr].filetype == "TelescopePrompt" then
+      return bufnr
+    end
+  end
 end
 
-local function compute_file_width(status, opts, icon_width, stat_enum)
+local function current_status(state)
+  local prompt_bufnr = get_fb_prompt(state)
+  if type(state.get_status) ~= "function" then
+    return nil
+  end
+  return state.get_status(prompt_bufnr)
+end
+
+local function compute_file_width(status, opts, icon_width)
   if not status or not status.results_win or not vim.api.nvim_win_is_valid(status.results_win) then
-    return 80
+    return math.max(15, 80 - icon_width - #sep)
   end
 
   local picker = status.picker or {}
-  local selection_caret = picker.selection_caret or ""
   local total = vim.api.nvim_win_get_width(status.results_win)
-    - #selection_caret
+    - #(picker.selection_caret or "")
     - icon_width
     - #sep
     - (opts.git_status and (2 + #sep) or 0)
 
-  if opts.display_stat then
-    for key, value in pairs(opts.display_stat) do
-      local default = stat_enum[key]
-      if default == nil then
-        opts.display_stat[key] = nil
-      else
-        if type(value) == "table" then
-          opts.display_stat[key] = vim.tbl_deep_extend("keep", value, default)
-        else
-          opts.display_stat[key] = default
-        end
-        total = total - (opts.display_stat[key].width or 0) - #sep
+  if type(opts.display_stat) == "table" then
+    for _, stat in pairs(opts.display_stat) do
+      if type(stat) == "table" then
+        total = total - (stat.width or 0) - #sep
       end
     end
   end
 
-  return total
+  return math.max(15, total)
 end
 
-local function make_display_path(entry, opts, parent_dir, deps)
-  local tail = deps.fb_utils.sanitize_path_str(entry.ordinal)
-  local display = deps.telescope_utils.transform_path(opts, tail)
+local function offset_styles(styles, offset)
+  local shifted = {}
+  for _, item in ipairs(styles or {}) do
+    shifted[#shifted + 1] = {
+      { item[1][1] + offset, item[1][2] + offset },
+      item[2],
+    }
+  end
+  return shifted
+end
 
-  if entry.is_dir then
-    if entry.path == parent_dir then
-      display = ".."
-    end
-    display = display .. deps.os_sep
+local function entry_segment(entry)
+  local path = entry.path or entry.value
+  local is_dir = entry.is_dir == true
+  if entry._real_icons_path ~= path
+      or entry._real_icons_is_dir ~= is_dir
+      or not entry._real_icons_segment then
+    local icon = resolver.resolve(is_dir and "directory" or "file", path, {
+      is_dir = is_dir,
+    })
+    entry._real_icons_path = path
+    entry._real_icons_is_dir = is_dir
+    entry._real_icons_segment = renderer.segment(icon)
+  end
+  return entry._real_icons_segment
+end
+
+local function call_base_display(base_display, entry, opts, file_width)
+  local previous_width = opts.file_width
+  if previous_width == nil then
+    opts.file_width = file_width
   end
 
-  return display
+  local ok, display, styles = pcall(base_display, entry)
+  opts.file_width = previous_width
+  if not ok then
+    error(display, 0)
+  end
+  return display, styles
 end
 
 function M.entry_maker(opts)
   patch_telescope_highlighter()
+
+  opts = opts or {}
   opts._entry_cache = opts._entry_cache or {}
+  local upstream_opts = vim.tbl_extend("force", {}, opts, {
+    disable_devicons = true,
+  })
+  local upstream = require("telescope._extensions.file_browser.make_entry")
+  local base_entry_maker = upstream(upstream_opts)
+  local state = require("telescope.state")
 
-  local deps = {
-    Path = require("plenary.path"),
-    entry_display = require("telescope.pickers.entry_display"),
-    fb_git = require("telescope._extensions.file_browser.git"),
-    fb_make_entry_utils = require("telescope._extensions.file_browser.make_entry_utils"),
-    fb_utils = require("telescope._extensions.file_browser.utils"),
-    fs_stat = require("telescope._extensions.file_browser.fs_stat"),
-    log = require("telescope.log"),
-    state = require("telescope.state"),
-    strings = require("plenary.strings"),
-    telescope_utils = require("telescope.utils"),
-  }
-  deps.os_sep = deps.Path.path.sep
-
-  local stat_enum = {
-    size = deps.fs_stat.size,
-    date = deps.fs_stat.date,
-    mode = deps.fs_stat.mode,
-  }
-
-  local prompt_bufnr = get_fb_prompt(deps.state)
-  local status = deps.state.get_status(prompt_bufnr)
-  local parent_dir = deps.fb_utils.sanitize_path_str(deps.Path:new(opts.cwd):parent():absolute())
-  local icon_width = opts.real_icons_width or require("real-icons.config").options.size.cols
-  local total_file_width = compute_file_width(status, opts, icon_width, stat_enum)
-  local mt = { cwd = deps.fb_utils.sanitize_path_str(opts.cwd) }
-
-  mt.display = function(entry)
-    if type(prompt_bufnr) ~= "number" or not vim.api.nvim_buf_is_valid(prompt_bufnr) then
-      prompt_bufnr = get_fb_prompt(deps.state)
+  return function(line)
+    local entry = base_entry_maker(line)
+    if not entry then
+      return nil
     end
 
-    if entry._real_icons_path ~= entry.path
-        or entry._real_icons_is_dir ~= entry.is_dir
-        or not entry._real_icons_segment then
-      local icon = resolver.resolve(entry.is_dir and "directory" or "file", entry.path, {
-        is_dir = entry.is_dir,
-      })
-      entry._real_icons_path = entry.path
-      entry._real_icons_is_dir = entry.is_dir
-      entry._real_icons_segment = renderer.segment(icon)
-    end
-    local segment = entry._real_icons_segment
-    local display_path = make_display_path(entry, opts, parent_dir, deps)
-    local file_width = vim.F.if_nil(opts.file_width, math.max(15, total_file_width))
-
-    if #display_path > file_width then
-      display_path = deps.strings.truncate(display_path, file_width, nil, -1)
+    local base_display = entry.display
+    if type(base_display) ~= "function" then
+      return entry
     end
 
-    local widths = {
-      { width = segment.width or icon_width },
-      { width = file_width },
-    }
+    entry.display = function(display_entry)
+      local segment = entry_segment(display_entry)
+      local icon_width = upstream_opts.real_icons_width or segment.width or require("real-icons.config").options.size.cols
+      local file_width = compute_file_width(current_status(state), upstream_opts, icon_width)
+      local display, styles = call_base_display(base_display, display_entry, upstream_opts, file_width)
+      local prefix = segment.text .. sep
+      local decorated_styles = {
+        { { 0, #segment.text }, segment.hl },
+      }
 
-    local display_array = {
-      { segment.text, segment.hl },
-      entry.stat and (entry.is_dir and { display_path, "TelescopePreviewDirectory" } or display_path)
-        or { display_path, "WarningMsg" },
-    }
-
-    if opts.git_status then
-      table.insert(widths, 2, { width = 2 })
-      if entry.path == parent_dir then
-        table.insert(display_array, 2, "  ")
-      else
-        table.insert(display_array, 2, entry.git_status)
-      end
+      vim.list_extend(decorated_styles, offset_styles(styles, #prefix))
+      return prefix .. (display or ""), decorated_styles
     end
 
-    if entry.stat and opts.display_stat then
-      for _, stat in ipairs({ "mode", "size", "date" }) do
-        local item = opts.display_stat[stat]
-        if item then
-          table.insert(widths, { width = item.width, right_justify = item.right_justify })
-          table.insert(display_array, item.display(entry))
-        end
-      end
-    end
-
-    return deps.entry_display.create({
-      separator = sep,
-      items = widths,
-      prompt_bufnr = prompt_bufnr,
-    })(display_array)
-  end
-
-  mt.__index = function(entry, key)
-    local raw = rawget(mt, key)
-    if raw then
-      return raw
-    end
-
-    if key == "git_status" then
-      local git_file_status = opts.git_file_status or {}
-      local git_status
-      if entry.is_dir then
-        if not vim.tbl_isempty(git_file_status) then
-          for git_path, value in pairs(git_file_status) do
-            if git_path:sub(1, #entry.value) == entry.value then
-              git_status = value
-              break
-            end
-          end
-        end
-      else
-        git_status = vim.F.if_nil(git_file_status[entry.value], "  ")
-      end
-      return deps.fb_git.make_display(opts, git_status)
-    end
-
-    if key == "stat" then
-      entry.stat = vim.F.if_nil(vim.loop.fs_stat(entry.value), false)
-      if not entry.stat then
-        return entry.lstat
-      end
-      return entry.stat
-    end
-
-    if key == "lstat" then
-      local lstat = vim.F.if_nil(vim.loop.fs_lstat(entry.value), false)
-      if not lstat then
-        deps.log.warn("Unable to get stat for " .. entry.value)
-        entry.lstat = false
-      else
-        entry.lstat = lstat
-      end
-      return entry.lstat
-    end
-
-    return rawget(entry, rawget({ value = "path" }, key))
-  end
-
-  return function(absolute_path)
-    absolute_path = deps.fb_utils.sanitize_path_str(absolute_path)
-    local path = deps.Path:new(absolute_path)
-    local is_dir = path:is_dir()
-    local entry = setmetatable({
-      absolute_path,
-      ordinal = deps.fb_make_entry_utils.get_ordinal_path(absolute_path, opts.cwd, parent_dir),
-      Path = path,
-      path = absolute_path,
-      is_dir = is_dir,
-    }, mt)
-
-    local cached_entry = opts._entry_cache[absolute_path]
-    if cached_entry then
-      cached_entry.is_dir = is_dir
-      cached_entry.path = absolute_path
-      cached_entry.Path = path
-      cached_entry.ordinal = entry.ordinal
-      cached_entry.display = entry.display
-      cached_entry.cwd = opts.cwd
-      return cached_entry
-    end
-
-    opts._entry_cache[absolute_path] = entry
     return entry
   end
 end
 
 function M.setup()
   patch_telescope_highlighter()
+  return true
 end
 
 return M

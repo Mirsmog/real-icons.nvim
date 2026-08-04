@@ -269,14 +269,18 @@ end
 
 function M.install_pack(name, opts)
   ensure_setup()
-  local ok, err = packs.install(name or config.options.pack, opts)
+  local target = name or config.options.pack
+  local ok, err = packs.install(target, opts)
   if not ok then
     log.error(err)
+  elseif target == config.options.pack then
+    M.use_pack(target, { notify = false })
   end
   return ok, err
 end
 
 function M.clear_cache(pack)
+  ensure_setup()
   local ok, err = cache.clear(pack)
   if not ok then
     log.error(err)
@@ -284,6 +288,8 @@ function M.clear_cache(pack)
   end
   backend.clear_uploaded()
   renderer.reset_cache()
+  clear_rendered_icons()
+  refresh_known_integrations()
   log.info("Icon cache cleared")
   return true
 end

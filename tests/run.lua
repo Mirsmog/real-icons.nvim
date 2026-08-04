@@ -39,6 +39,35 @@ local function skip(name, reason)
   print("skip - " .. name .. ": " .. reason)
 end
 
+local function with_modules(overrides, reset, callback)
+  local names = {}
+  for name in pairs(overrides or {}) do
+    names[name] = true
+  end
+  for _, name in ipairs(reset or {}) do
+    names[name] = true
+  end
+
+  local saved = {}
+  local present = {}
+  for name in pairs(names) do
+    present[name] = package.loaded[name] ~= nil
+    saved[name] = package.loaded[name]
+    package.loaded[name] = nil
+  end
+  for name, value in pairs(overrides or {}) do
+    package.loaded[name] = value
+  end
+
+  local ok, err = xpcall(callback, debug.traceback)
+  for name in pairs(names) do
+    package.loaded[name] = present[name] and saved[name] or nil
+  end
+  if not ok then
+    error(err, 0)
+  end
+end
+
 local terminal_env_keys = {
   "GHOSTTY_BIN_DIR",
   "GHOSTTY_RESOURCES_DIR",
@@ -95,7 +124,75 @@ test("builtin icon resolution and public API", function()
   assert_equal(meta.fallback, true, "disabled backend should use fallback")
   assert_true(vim.tbl_contains(icons.categories(), "directory"), "directory category")
   assert_true(vim.tbl_contains(icons.list("extension"), "lua"), "lua extension")
-  assert_equal(vim.fn.exists(":RealIconsBuildCache"), 2, "plugin command")
+end)
+
+test("one root command exposes the complete user workflow", function()
+  assert_equal(vim.fn.exists(":RealIcons"), 2, "root plugin command")
+  for _, name in ipairs({
+    "RealIconsBuildCache",
+    "RealIconsClearCache",
+    "RealIconsDemo",
+    "RealIconsDiscoverPacks",
+    "RealIconsHealth",
+    "RealIconsInstallPack",
+    "RealIconsOilEnable",
+    "RealIconsPacks",
+    "RealIconsSelectPack",
+    "RealIconsUsePack",
+  }) do
+    assert_equal(vim.fn.exists(":" .. name), 0, "removed command " .. name)
+  end
+
+  local command = require("real-icons.command")
+  local completion = command.complete("", "RealIcons ", #"RealIcons ")
+  for _, action in ipairs({ "demo", "packs", "install", "health", "help", "clear-cache" }) do
+    assert_true(vim.tbl_contains(completion, action), "command completion " .. action)
+  end
+
+  local called = {}
+  with_modules({
+    ["real-icons"] = {
+      demo = function()
+        called.demo = true
+      end,
+      select_pack = function()
+        called.packs = true
+      end,
+      install_pack = function(name)
+        called.install = name
+        return true
+      end,
+      clear_cache = function(name)
+        called.clear_cache = name or true
+        return true
+      end,
+    },
+  }, {}, function()
+    assert_true(command.execute({ "demo" }))
+    assert_true(command.execute({ "packs" }))
+    assert_true(command.execute({ "install" }))
+    assert_true(command.execute({ "clear-cache", "material" }))
+    assert_equal(called.install, "material", "default install pack")
+
+    called.install = nil
+    vim.cmd("RealIconsInstallPack material")
+    assert_equal(called.install, "material", "legacy install command bridge")
+    assert_equal(vim.fn.exists(":RealIconsInstallPack"), 0, "legacy command stays hidden")
+
+    called.demo = nil
+    vim.cmd("RealIconsDemo")
+    assert_true(called.demo, "legacy demo command bridge")
+    assert_equal(vim.fn.exists(":RealIconsDemo"), 0, "legacy demo command stays hidden")
+
+    called.packs = nil
+    vim.cmd("RealIconsPacks")
+    assert_true(called.packs, "legacy packs command bridge")
+    assert_equal(vim.fn.exists(":RealIconsPacks"), 0, "legacy packs command stays hidden")
+  end)
+  assert_true(called.demo, "demo action")
+  assert_true(called.packs, "packs action")
+  assert_equal(called.install, "material", "default install pack")
+  assert_equal(called.clear_cache, "material", "cache pack")
 end)
 
 test("directory rules match full paths with stable precedence", function()
@@ -400,6 +497,437 @@ test("placeholder dimensions are validated", function()
   assert_equal(#renderer.placeholder(2, 1), 1, "placeholder row count")
   assert_equal(pcall(renderer.placeholder, 4, 1), false, "column limit")
   assert_equal(pcall(renderer.placeholder, 1, 2), false, "row limit")
+end)
+
+test("bufferline integration preserves options and injects its public icon callback", function()
+  local applied
+  local bufferline = {
+    setup = function(opts)
+      applied = opts
+    end,
+  }
+
+  with_modules({
+    bufferline = bufferline,
+  }, {
+    "real-icons.integrations.bufferline",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local integration = require("real-icons.integrations.bufferline")
+    local ok, err = integration.setup()
+    assert_true(ok, err)
+
+    bufferline.setup({ options = { numbers = "ordinal" } })
+    assert_equal(applied.options.numbers, "ordinal", "user bufferline option")
+    assert_equal(type(applied.options.get_element_icon), "function", "icon callback")
+    local icon, hl = applied.options.get_element_icon({
+      directory = false,
+      filetype = "lua",
+      path = "/project/init.lua",
+    })
+    assert_equal(type(icon), "string", "bufferline icon")
+    assert_equal(type(hl), "string", "bufferline icon highlight")
+  end)
+end)
+
+test("lualine integration inserts an icon without replacing configured components", function()
+  local applied
+  local lualine = {
+    setup = function(opts)
+      applied = opts
+    end,
+  }
+
+  with_modules({
+    lualine = lualine,
+  }, {
+    "real-icons.integrations.lualine",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local integration = require("real-icons.integrations.lualine")
+    local ok, err = integration.setup()
+    assert_true(ok, err)
+
+    lualine.setup({
+      sections = {
+        lualine_c = { "branch", "filename" },
+      },
+    })
+    local section = applied.sections.lualine_c
+    assert_equal(section[1], "branch", "existing lualine component")
+    assert_true(section[2].real_icons_lualine, "real icon component")
+    assert_equal(section[3], "filename", "target lualine component")
+  end)
+end)
+
+test("mini.files integration uses the official content prefix hook", function()
+  local applied
+  local files = {
+    config = {
+      content = {},
+      windows = { preview = false },
+    },
+    setup = function(opts)
+      applied = opts
+    end,
+  }
+
+  with_modules({
+    ["mini.files"] = files,
+  }, {
+    "real-icons.integrations.mini_files",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local integration = require("real-icons.integrations.mini_files")
+    local ok, err = integration.setup()
+    assert_true(ok, err)
+
+    files.setup({ windows = { preview = true } })
+    assert_equal(applied.windows.preview, true, "mini.files user option")
+    assert_equal(type(applied.content.prefix), "function", "mini.files prefix")
+    local prefix, hl = applied.content.prefix({
+      fs_type = "file",
+      path = "/project/init.lua",
+    })
+    assert_true(prefix:sub(-1) == " ", "mini.files icon spacing")
+    assert_equal(type(hl), "string", "mini.files icon highlight")
+  end)
+end)
+
+test("neo-tree integration uses the official icon provider", function()
+  local defaults = {
+    default_component_configs = {
+      icon = {
+        folder_closed = ">",
+      },
+    },
+  }
+  local neo_tree = {
+    config = vim.deepcopy(defaults),
+  }
+
+  with_modules({
+    ["neo-tree"] = neo_tree,
+    ["neo-tree.defaults"] = defaults,
+  }, {
+    "real-icons.integrations.neo_tree",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local integration = require("real-icons.integrations.neo_tree")
+    local ok, err = integration.setup()
+    assert_true(ok, err)
+    assert_equal(
+      defaults.default_component_configs.icon.provider,
+      integration.provider,
+      "neo-tree default provider"
+    )
+    assert_equal(defaults.default_component_configs.icon.folder_closed, ">", "neo-tree option")
+
+    local icon = integration.provider({}, {
+      path = "/project/src",
+      type = "directory",
+    })
+    assert_equal(type(icon.text), "string", "neo-tree icon")
+    assert_equal(type(icon.highlight), "string", "neo-tree highlight")
+  end)
+end)
+
+test("Oil integration replaces the native icon column without buffer scans", function()
+  local registered_name
+  local registered_column
+  local columns = {
+    register = function(name, column)
+      registered_name = name
+      registered_column = column
+    end,
+  }
+  local constants = {
+    FIELD_ID = 1,
+    FIELD_NAME = 2,
+    FIELD_TYPE = 3,
+    FIELD_META = 4,
+  }
+  local oil = {
+    get_current_dir = function()
+      return "/project"
+    end,
+  }
+  local util = {
+    export_entry = function(entry)
+      return {
+        id = entry[1],
+        name = entry[2],
+        type = entry[3],
+        meta = entry[4],
+      }
+    end,
+  }
+
+  with_modules({
+    oil = oil,
+    ["oil.columns"] = columns,
+    ["oil.constants"] = constants,
+    ["oil.util"] = util,
+  }, {
+    "real-icons.integrations.oil",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local integration = require("real-icons.integrations.oil")
+    local ok, err = integration.setup()
+    assert_true(ok, err)
+    assert_true(integration.is_patched(), "Oil column should be installed")
+    assert_equal(registered_name, "icon", "Oil column name")
+    assert_equal(type(registered_column.render), "function", "Oil column renderer")
+    assert_equal(type(registered_column.parse), "function", "Oil column parser")
+
+    local chunk = registered_column.render({ 1, "init.lua", "file" }, {}, 0)
+    assert_equal(type(chunk[1]), "string", "Oil icon text")
+    assert_equal(type(chunk[2]), "string", "Oil icon highlight")
+    assert_true(chunk[1]:sub(-1) == " ", "Oil icon padding")
+
+    local autocmds = vim.api.nvim_get_autocmds({ group = "RealIconsOil" })
+    for _, autocmd in ipairs(autocmds) do
+      assert_true(
+        autocmd.event ~= "TextChanged" and autocmd.event ~= "TextChangedI",
+        "Oil integration must not scan on text changes"
+      )
+    end
+  end)
+end)
+
+test("nvim-tree integration registers the public Decorator API", function()
+  local Decorator = {}
+  Decorator.__index = Decorator
+  function Decorator:extend()
+    local child = {}
+    child.__index = child
+    return setmetatable(child, { __index = self })
+  end
+
+  local applied
+  local custom_decorator = { name = "Custom" }
+  local nvim_tree = {
+    setup = function(opts)
+      applied = opts
+    end,
+  }
+  local tree_config = {
+    d = {
+      renderer = {
+        decorators = { "Git", "Open", "Cut" },
+      },
+    },
+  }
+  local previous_setup = vim.g.NvimTreeSetup
+  vim.g.NvimTreeSetup = nil
+
+  local ok, err = xpcall(function()
+    with_modules({
+      ["nvim-tree"] = nvim_tree,
+      ["nvim-tree.api"] = { Decorator = Decorator },
+      ["nvim-tree.config"] = tree_config,
+    }, {
+      "real-icons.integrations.nvim_tree",
+    }, function()
+      require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+      local integration = require("real-icons.integrations.nvim_tree")
+      local setup_ok, setup_err = integration.setup()
+      assert_true(setup_ok, setup_err)
+      assert_equal(integration.mode(), "decorator", "nvim-tree integration mode")
+
+      nvim_tree.setup({ renderer = { decorators = { "Git", custom_decorator } } })
+      assert_equal(applied.renderer.decorators[1], "Git", "first user decorator")
+      assert_equal(applied.renderer.decorators[2], custom_decorator, "custom user decorator")
+      assert_equal(
+        applied.renderer.decorators[3],
+        integration.decorator(),
+        "real-icons decorator"
+      )
+
+      local repeated = integration.opts(vim.deepcopy(applied))
+      assert_equal(#repeated.renderer.decorators, 3, "real-icons decorator is not duplicated")
+    end)
+  end, debug.traceback)
+  vim.g.NvimTreeSetup = previous_setup
+  if not ok then
+    error(err, 0)
+  end
+end)
+
+test("nvim-tree integration keeps a legacy fallback for older releases", function()
+  local Builder = {
+    icon_name_decorated = function()
+      return { str = "old", hl = { "Old" } }, { str = "init.lua", hl = {} }
+    end,
+  }
+  local nvim_tree = {
+    setup = function() end,
+  }
+
+  with_modules({
+    ["nvim-tree"] = nvim_tree,
+    ["nvim-tree.api"] = {},
+    ["nvim-tree.renderer.builder"] = Builder,
+  }, {
+    "real-icons.integrations.nvim_tree",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local integration = require("real-icons.integrations.nvim_tree")
+    local ok, err = integration.setup()
+    assert_true(ok, err)
+    assert_equal(integration.mode(), "legacy", "nvim-tree fallback mode")
+
+    local icon = Builder.icon_name_decorated({}, {
+      absolute_path = "/project/init.lua",
+      type = "file",
+    })
+    assert_true(icon.str ~= "old", "legacy icon should be replaced")
+  end)
+end)
+
+test("Snacks picker integration preserves formatter output and caches item icons", function()
+  local original_calls = 0
+  local builtin_icons_disabled = false
+  local format = {
+    filename = function(_, picker)
+      original_calls = original_calls + 1
+      builtin_icons_disabled = picker.opts.icons.files.enabled == false
+      return { { "init.lua", "SnacksPickerFile" } }
+    end,
+  }
+
+  with_modules({
+    ["snacks.picker.format"] = format,
+  }, {
+    "real-icons.integrations.snacks_picker",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local integration = require("real-icons.integrations.snacks_picker")
+    local ok, err = integration.setup()
+    assert_true(ok, err)
+
+    local item = { file = "/project/init.lua" }
+    local picker = { opts = { icons = { files = { enabled = true } } } }
+    local first = format.filename(item, picker)
+    local segment = item._real_icons_segment
+    local second = format.filename(item, picker)
+    assert_true(builtin_icons_disabled, "Snacks builtin icon should be disabled during formatting")
+    assert_equal(picker.opts.icons.files.enabled, true, "Snacks icon setting should be restored")
+    assert_equal(original_calls, 2, "original Snacks formatter calls")
+    assert_equal(item._real_icons_segment, segment, "Snacks item icon cache")
+    assert_true(#first >= 3 and #second >= 3, "Snacks formatter chunks")
+  end)
+end)
+
+test("Telescope integration wraps the upstream file entry maker", function()
+  local received_opts
+  local make_entry = {
+    gen_from_file = function(opts)
+      received_opts = opts
+      return function(path)
+        return {
+          path = path,
+          display = function(entry)
+            return entry.path, { { { 0, #entry.path }, "Base" } }
+          end,
+        }
+      end
+    end,
+  }
+  local highlights = {
+    new = function()
+      return {
+        hi_selection = function() end,
+      }
+    end,
+  }
+
+  with_modules({
+    ["telescope.make_entry"] = make_entry,
+    ["telescope.pickers.highlights"] = highlights,
+  }, {
+    "real-icons.integrations.telescope",
+    "real-icons.integrations.telescope_file_browser",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local integration = require("real-icons.integrations.telescope")
+    local ok, err = integration.setup()
+    assert_true(ok, err)
+
+    local maker = make_entry.gen_from_file({ path_display = { "truncate" } })
+    assert_equal(received_opts.disable_devicons, true, "Telescope builtin icons")
+    assert_equal(received_opts.path_display[1], "truncate", "Telescope entry option")
+    local entry = maker("/project/init.lua")
+    local display, styles = entry.display(entry)
+    assert_true(display:sub(-#entry.path) == entry.path, "Telescope base display")
+    assert_true(#styles >= 2, "Telescope icon and base styles")
+  end)
+end)
+
+test("telescope-file-browser decorates the upstream entry maker", function()
+  local upstream_opts
+  local seen_file_width
+  local upstream = function(opts)
+    upstream_opts = opts
+    return function(path)
+      return {
+        marker = "upstream",
+        path = path,
+        is_dir = false,
+        display = function()
+          seen_file_width = opts.file_width
+          return "init.lua", { { { 0, 4 }, "Base" } }
+        end,
+      }
+    end
+  end
+  local current_win = vim.api.nvim_get_current_win()
+  local state = {
+    get_existing_prompt_bufnrs = function()
+      return { 77 }
+    end,
+    get_status = function()
+      return {
+        picker = {
+          finder = { _browse_files = true },
+          selection_caret = "> ",
+        },
+        results_win = current_win,
+      }
+    end,
+  }
+  local highlights = {
+    new = function()
+      return {
+        hi_selection = function() end,
+      }
+    end,
+  }
+
+  with_modules({
+    ["telescope._extensions.file_browser.make_entry"] = upstream,
+    ["telescope.pickers.highlights"] = highlights,
+    ["telescope.state"] = state,
+  }, {
+    "real-icons.integrations.telescope_file_browser",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local integration = require("real-icons.integrations.telescope_file_browser")
+    local maker = integration.entry_maker({
+      cwd = "/project",
+      display_stat = false,
+      git_status = false,
+    })
+    assert_equal(upstream_opts.disable_devicons, true, "file-browser builtin icons")
+
+    local entry = maker("/project/init.lua")
+    assert_equal(entry.marker, "upstream", "upstream entry fields")
+    local display, styles = entry.display(entry)
+    assert_true(display:sub(-8) == "init.lua", "upstream file-browser display")
+    assert_true(type(seen_file_width) == "number" and seen_file_width >= 15, "dynamic file width")
+    assert_equal(upstream_opts.file_width, nil, "temporary file width restoration")
+    assert_true(#styles >= 2, "file-browser icon and upstream styles")
+  end)
 end)
 
 test("fzf-lua integration preserves setup and prepares only an icon slot", function()

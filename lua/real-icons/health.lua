@@ -13,15 +13,15 @@ local integrations = {
   { "lualine", { "lualine" } },
   { "mini_files", { "mini.files" } },
   { "neo_tree", { "neo-tree.defaults" } },
-  { "nvim_tree", { "nvim-tree.renderer.builder" } },
-  { "oil", { "oil" } },
+  { "nvim_tree", { "nvim-tree" } },
+  { "oil", { "oil", "oil.columns" } },
   { "snacks_picker", { "snacks.picker.format" } },
   { "telescope", { "telescope.make_entry" } },
   {
     "telescope_file_browser",
     {
       "telescope",
-      "telescope._extensions.file_browser.make_entry_utils",
+      "telescope._extensions.file_browser.make_entry",
     },
   },
 }
@@ -152,7 +152,7 @@ function M.check()
     end
   elseif config.options.pack == "material" then
     h.warn("Material icon pack is not installed; using builtin fallback pack")
-    h.info("Run :RealIconsInstallPack material")
+    h.info("Run :RealIcons install")
   else
     h.warn("Configured icon pack is not available; using builtin fallback pack")
   end

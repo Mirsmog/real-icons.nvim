@@ -8,8 +8,8 @@ local load_errors = {}
 
 local material = {
   name = "material",
-  version = "5.35.0",
-  url = "https://registry.npmjs.org/material-icon-theme/-/material-icon-theme-5.35.0.tgz",
+  version = "5.37.0",
+  url = "https://registry.npmjs.org/material-icon-theme/-/material-icon-theme-5.37.0.tgz",
 }
 
 local function pack_root(name)

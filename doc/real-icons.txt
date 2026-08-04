@@ -19,8 +19,8 @@ real-icons.nvim renders file and folder icons as real terminal images. It uses
 Kitty Graphics Protocol Unicode placeholders, supports Ghostty and Kitty, and
 can fall back to glyph icon providers such as mini.icons or nvim-web-devicons.
 
-The project is experimental and usable today on Ghostty and Kitty. Public APIs
-may change before v1.0.
+The project is actively developed and usable today on Ghostty and Kitty.
+Public Lua APIs may change before v1.0.
 
 It provides real image icons in terminal UI rows, SVG icon pack rasterization,
 VS Code icon theme support, custom local packs, and opt-in integrations for
@@ -50,7 +50,7 @@ Example lazy.nvim spec:
 >
   {
     "Mirsmog/real-icons.nvim",
-    build = ":RealIconsInstallPack material",
+    build = ":RealIcons install",
     opts = {
       pack = "material",
       integrations = {
@@ -167,21 +167,15 @@ ICON PACKS                                                  *real-icons-packs*
 
 Install the default Material Icon Theme pack:
 >
-  :RealIconsInstallPack material
+  :RealIcons install
 <
 
 The plugin stores installed packs under stdpath("data")/real-icons/packs and
 generated PNG files under stdpath("cache")/real-icons.
 
-Switch packs at runtime:
+Discover, preview, and switch packs at runtime:
 >
-  :RealIconsUsePack material
-  :RealIconsUsePack builtin
-<
-
-List configured packs:
->
-  :RealIconsPacks
+  :RealIcons packs
 <
 
 Lua API:
@@ -236,7 +230,7 @@ Simple local icon folder:
 
 Discover and preview local VS Code icon themes:
 >
-  :RealIconsSelectPack
+  :RealIcons packs
 <
 
 The picker scans common VS Code-compatible extension directories, registers
@@ -302,13 +296,15 @@ telescope-file-browser.nvim:
   require("telescope").setup({
     extensions = {
       file_browser = {
-        disable_devicons = true,
         entry_maker = require("real-icons.integrations.telescope_file_browser").entry_maker,
       },
     },
   })
   require("telescope").load_extension("file_browser")
 <
+
+The adapter wraps the extension's upstream entry maker. Caching,
+multi-selection, git and stat columns, and resize handling stay upstream.
 
 fzf-lua:
 >
@@ -338,6 +334,9 @@ oil.nvim:
   })
 <
 
+The adapter replaces Oil's native icon column renderer and does not scan the
+buffer on text changes.
+
 nvim-tree.lua:
 >
   require("real-icons").setup({
@@ -346,6 +345,9 @@ nvim-tree.lua:
     },
   })
 <
+
+Current nvim-tree releases use the public Decorator API. Older releases use a
+legacy renderer fallback. Other nvim-tree decorators remain unchanged.
 
 neo-tree.nvim:
 >
@@ -486,53 +488,49 @@ Switch icon packs:
 ==============================================================================
 COMMANDS                                                  *real-icons-commands*
 
-:RealIconsHealth
-  Run health checks.
+:RealIcons
+  Open the real-icons.nvim action menu.
 
-:RealIconsDemo
-  Open a demo buffer.
+:RealIcons demo
+  Open a renderer preview.
 
-:RealIconsInstallPack {name}
-  Install an icon pack. Currently supported: material.
+:RealIcons packs
+  Discover, preview, and switch icon packs.
 
-:RealIconsBuildCache
-  Convert icons in the active pack to cached PNG files in parallel.
+:RealIcons install [name]
+  Install an icon pack. The default and currently supported name is material.
 
-:RealIconsClearCache [name]
-  Clear generated PNG cache.
+:RealIcons health
+  Run :checkhealth real-icons.
 
-:RealIconsUsePack [name]
-  Switch the active icon pack, or show the current pack.
+:RealIcons help
+  Open this help page.
 
-:RealIconsPacks
-  List configured icon packs.
+:RealIcons clear-cache [name]
+  Clear generated cache files for one pack or every pack. Cache variants are
+  selected automatically, so this is normally only needed for recovery.
 
-:RealIconsDiscoverPacks
-  Discover local VS Code-compatible icon themes.
-
-:RealIconsSelectPack
-  Pick and preview an icon pack.
-
-:RealIconsOilEnable
-  Attach the Oil integration to the current buffer.
+All actions and arguments support command-line completion.
 
 ==============================================================================
 TROUBLESHOOTING                                    *real-icons-troubleshooting*
 
-Run :RealIconsHealth first. It checks terminal support, termguicolors,
+Run :RealIcons health first. It checks terminal support, termguicolors,
 ImageMagick, tmux passthrough, and the active icon pack.
 
 If icons do not appear:
 - Confirm you are running inside Ghostty or Kitty.
 - Confirm termguicolors is enabled.
-- Install the default pack with :RealIconsInstallPack material.
-- Run :RealIconsDemo outside tmux, then inside tmux.
+- Install the default pack with :RealIcons install.
+- Run :RealIcons demo outside tmux, then inside tmux.
 - In tmux, confirm set -g allow-passthrough on is loaded.
 
 If icons are blurry:
 - Keep SVG packs as sources when possible.
 - Increase size.pixels.
 - Use cols = 2 for one-row icons.
-- Clear the cache after changing size or color options.
+
+Cache paths include size, density, padding, and color settings. Changing those
+options automatically creates a new variant without a manual rebuild.
 
 vim:tw=78:ts=8:noet:ft=help:norl:
