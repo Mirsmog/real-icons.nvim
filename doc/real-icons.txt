@@ -19,9 +19,6 @@ real-icons.nvim renders file and folder icons as real terminal images. It uses
 Kitty Graphics Protocol Unicode placeholders, supports Ghostty and Kitty, and
 can fall back to glyph icon providers such as mini.icons or nvim-web-devicons.
 
-The project is actively developed and usable today on Ghostty and Kitty.
-Public Lua APIs may change before v1.0.
-
 It provides real image icons in terminal UI rows, SVG icon pack rasterization,
 VS Code icon theme support, custom local packs, and opt-in integrations for
 popular Neovim UI plugins.
@@ -35,11 +32,8 @@ REQUIREMENTS                                          *real-icons-requirements*
 - ImageMagick for SVG icon packs and color transforms
 - curl and tar for pack installation
 
-tmux requires passthrough and RGB color support:
+tmux requires passthrough:
 >
-  set -g default-terminal "tmux-256color"
-  set -gq terminal-overrides[1] "*:Tc"
-  set -gq terminal-features[3] "xterm-ghostty:RGB"
   set -g allow-passthrough on
 <
 
@@ -129,8 +123,8 @@ the generated PNG size. If a pack has too much transparent padding, set
 trim = true. If icons look too large after trimming, add padding.
 
 density = "auto" reads each SVG view box and chooses a suitable raster density
-with oversample headroom. Set density = 384 to use the previous fixed-density
-behavior.
+with oversample headroom. Set density to a number such as 384 to force a fixed
+raster density.
 
 WEZTERM ~
 
@@ -430,7 +424,8 @@ Get an icon:
   local text, hl, is_default, meta = icons.get("file", "init.lua")
 <
 
-The category is explicit by design; path-only shorthand is not supported.
+icons.get() requires an explicit category; path-only shorthand is not
+supported.
 
 Supported categories:
 >
@@ -498,7 +493,7 @@ COMMANDS                                                  *real-icons-commands*
   Discover, preview, and switch icon packs.
 
 :RealIcons install [name]
-  Install an icon pack. The default and currently supported name is material.
+  Install Material Icon Theme. Omit [name] or pass material.
 
 :RealIcons health
   Run :checkhealth real-icons.

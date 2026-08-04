@@ -121,8 +121,8 @@ require("real-icons").setup({
 })
 ```
 
-The adapters are designed to preserve sorting, filtering, git status,
-diagnostics, and the rest of each UI's configuration.
+Integrations preserve sorting, filtering, git status, diagnostics, and other UI
+behavior.
 
 <details>
 <summary><strong>telescope-file-browser.nvim setup</strong></summary>
@@ -139,9 +139,8 @@ require("telescope").setup({
 require("telescope").load_extension("file_browser")
 ```
 
-The adapter decorates the extension's own entry maker, so caching,
-multi-selection, git columns, stat columns, and resize behavior remain owned by
-the extension.
+Caching, multi-selection, git columns, stat columns, and resize behavior
+continue to work with the custom entry maker.
 
 </details>
 
@@ -161,8 +160,7 @@ your machine:
 ```
 
 The picker scans the standard extension directories for VS Code, VSCodium,
-Cursor, and Windsurf. It previews each theme before switching. The hero image
-uses a locally discovered Catppuccin theme.
+Cursor, and Windsurf, and previews each theme before switching.
 
 <details>
 <summary><strong>More pack and integration previews</strong></summary>
@@ -248,9 +246,6 @@ run `:help real-icons-setup`.
 <summary><strong>tmux configuration</strong></summary>
 
 ```tmux
-set -g default-terminal "tmux-256color"
-set -gq terminal-overrides[1] "*:Tc"
-set -gq terminal-features[3] "xterm-ghostty:RGB"
 set -g allow-passthrough on
 ```
 
@@ -307,11 +302,6 @@ Run the local test suite with:
 ```sh
 make test
 ```
-
-No network access is required.
-
-The plugin is actively developed and usable today. Public Lua APIs may change
-before v1.0.
 
 ## Credits
 
