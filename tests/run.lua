@@ -77,6 +77,7 @@ test("default configuration", function()
   assert_equal(config.options.size.oversample, 1.25, "default oversample")
   assert_equal(config.options.size.cols, 2, "default columns")
   assert_equal(#config.options.rules.directories, 0, "default directory rules")
+  assert_equal(config.options.integrations.fzf_lua, false, "default fzf-lua integration")
 end)
 
 test("builtin icon resolution and public API", function()
@@ -399,6 +400,111 @@ test("placeholder dimensions are validated", function()
   assert_equal(#renderer.placeholder(2, 1), 1, "placeholder row count")
   assert_equal(pcall(renderer.placeholder, 4, 1), false, "column limit")
   assert_equal(pcall(renderer.placeholder, 1, 2), false, "row limit")
+end)
+
+test("fzf-lua integration preserves setup and prepares only an icon slot", function()
+  local module_names = {
+    "fzf-lua",
+    "fzf-lua.devicons",
+    "fzf-lua.path",
+    "fzf-lua.utils",
+    "fzf-lua.win",
+    "real-icons.integrations.fzf_lua",
+  }
+  local saved = {}
+  for _, name in ipairs(module_names) do
+    saved[name] = package.loaded[name]
+  end
+
+  local fzf_setup_calls = 0
+  local installed_state
+  local fake_fzf = {
+    setup = function()
+      fzf_setup_calls = fzf_setup_calls + 1
+    end,
+  }
+  local fake_devicons = {
+    load = function()
+      return false
+    end,
+    set_state = function(_, state)
+      installed_state = state
+    end,
+  }
+  local fake_path = {
+    entry_to_file = function(entry)
+      return { path = entry }
+    end,
+  }
+  local fake_utils = { nbsp = vim.fn.nr2char(0x2002) }
+  local fake_win = {
+    new = function(opts)
+      return { opts = opts }
+    end,
+  }
+
+  package.loaded["fzf-lua"] = fake_fzf
+  package.loaded["fzf-lua.devicons"] = fake_devicons
+  package.loaded["fzf-lua.path"] = fake_path
+  package.loaded["fzf-lua.utils"] = fake_utils
+  package.loaded["fzf-lua.win"] = fake_win
+  package.loaded["real-icons.integrations.fzf_lua"] = nil
+
+  local scratch
+  local ok, err = xpcall(function()
+    local integration = require("real-icons.integrations.fzf_lua")
+    local setup_ok, setup_err = integration.setup()
+    assert_true(setup_ok, setup_err)
+    assert_equal(fzf_setup_calls, 0, "integration must not rerun fzf-lua setup")
+    assert_true(fake_devicons.load(), "neutral icon provider should load")
+    assert_true(installed_state.real_icons.visible_only, "visible-only marker")
+    assert_equal(installed_state.real_icons.slot_cols, 2, "reserved slot width")
+    assert_equal(vim.tbl_count(installed_state.icons.by_filename), 0, "filename icons prepared")
+    assert_equal(vim.tbl_count(installed_state.icons.by_ext), 0, "extension icons prepared")
+
+    local slot = {
+      cols = installed_state.real_icons.slot_cols,
+      file = installed_state.default_icon.icon,
+      directory = installed_state.dir_icon.icon,
+      nbsp = fake_utils.nbsp,
+    }
+    local candidate, col = integration._line_entry(
+      "▌ " .. slot.file .. slot.nbsp .. "src/init.lua      │",
+      slot
+    )
+    assert_equal(candidate, "src/init.lua", "visible fzf entry path")
+    assert_true(type(col) == "number" and col > 0, "icon overlay column")
+
+    local user_on_create_calls = 0
+    local opts = {
+      _type = "file",
+      winopts = {
+        width = 0.61,
+        on_create = function()
+          user_on_create_calls = user_on_create_calls + 1
+        end,
+      },
+    }
+    local picker = fake_win.new(opts)
+    assert_equal(picker.opts.winopts.width, 0.61, "user layout width")
+
+    scratch = vim.api.nvim_create_buf(false, true)
+    local winid = vim.api.nvim_get_current_win()
+    opts.winopts.on_create({ winid = winid, bufnr = scratch })
+    assert_equal(user_on_create_calls, 1, "user on_create callback")
+    assert_true(integration.is_attached(winid, scratch), "fzf buffer attachment")
+    integration.detach(scratch)
+  end, debug.traceback)
+
+  if scratch and vim.api.nvim_buf_is_valid(scratch) then
+    vim.api.nvim_buf_delete(scratch, { force = true })
+  end
+  for _, name in ipairs(module_names) do
+    package.loaded[name] = saved[name]
+  end
+  if not ok then
+    error(err, 0)
+  end
 end)
 
 print(string.format("tests: %d passed, %d skipped, %d failed", passed, skipped, #failures))

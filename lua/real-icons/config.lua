@@ -30,6 +30,7 @@ M.defaults = {
   },
   integrations = {
     bufferline = false,
+    fzf_lua = false,
     lualine = false,
     mini_files = false,
     neo_tree = false,

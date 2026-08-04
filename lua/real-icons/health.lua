@@ -9,6 +9,7 @@ local M = {}
 
 local integrations = {
   { "bufferline", { "bufferline" } },
+  { "fzf_lua", { "fzf-lua", "fzf-lua.devicons", "fzf-lua.win" } },
   { "lualine", { "lualine" } },
   { "mini_files", { "mini.files" } },
   { "neo_tree", { "neo-tree.defaults" } },

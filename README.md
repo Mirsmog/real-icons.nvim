@@ -96,6 +96,7 @@ bundled icon pack.
 | --- | --- | --- |
 | `telescope.nvim` | supported | automatic |
 | `telescope-file-browser.nvim` | supported | manual entry maker |
+| `fzf-lua` | supported | automatic or manual |
 | `oil.nvim` | supported | automatic |
 | `nvim-tree.lua` | supported | automatic |
 | `neo-tree.nvim` | supported | automatic or manual |
@@ -141,6 +142,7 @@ require("real-icons").setup({
   },
   integrations = {
     bufferline = false,
+    fzf_lua = false,
     lualine = false,
     mini_files = false,
     neo_tree = false,
@@ -406,6 +408,30 @@ require("telescope").setup({
 
 require("telescope").load_extension("file_browser")
 ```
+
+### fzf-lua
+
+Automatic setup:
+
+```lua
+require("real-icons").setup({
+  integrations = {
+    fzf_lua = true,
+  },
+})
+```
+
+Manual setup:
+
+```lua
+require("fzf-lua").setup(require("real-icons.integrations.fzf_lua").opts())
+```
+
+The adapter keeps the user's `fzf-lua` layout and search pipeline intact. It
+reserves a fixed-width icon slot in file entries, then renders only rows visible
+in the embedded fzf window. It does not prepare the entire icon pack when a
+picker opens. Native `fzf-tmux` windows cannot display Neovim extmarks, so they
+keep the lightweight fallback slot.
 
 ### oil.nvim
 

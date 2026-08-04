@@ -92,6 +92,7 @@ Full configuration:
     },
     integrations = {
       bufferline = false,
+      fzf_lua = false,
       lualine = false,
       mini_files = false,
       neo_tree = false,
@@ -308,6 +309,25 @@ telescope-file-browser.nvim:
   })
   require("telescope").load_extension("file_browser")
 <
+
+fzf-lua:
+>
+  require("real-icons").setup({
+    integrations = {
+      fzf_lua = true,
+    },
+  })
+<
+
+Manual fzf-lua setup:
+>
+  require("fzf-lua").setup(require("real-icons.integrations.fzf_lua").opts())
+<
+
+The adapter preserves the configured fzf-lua layout and search pipeline. It
+reserves an icon slot and renders only entries visible in the embedded fzf
+window. Native fzf-tmux windows cannot display Neovim extmarks and keep the
+lightweight fallback slot.
 
 oil.nvim:
 >
