@@ -11,6 +11,8 @@ M.defaults = {
     pixels = 64,
     padding = 0,
     trim = false,
+    density = "auto",
+    oversample = 1.25,
   },
   color = {
     tint = nil,

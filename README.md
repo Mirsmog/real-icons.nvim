@@ -52,6 +52,17 @@ set -gq terminal-features[3] "xterm-ghostty:RGB"
 set -g allow-passthrough on
 ```
 
+### WezTerm Status
+
+WezTerm implements the base Kitty Graphics Protocol, but it does not currently
+implement Kitty Unicode placeholders (`U=1`). Those placeholders are required
+to attach an image to a Neovim grid cell. The upstream work is tracked in
+[wezterm/wezterm#986](https://github.com/wezterm/wezterm/issues/986).
+
+`backend = "auto"` detects WezTerm and safely uses glyph fallback. Setting
+`backend = "kitty"` can be used to test a future WezTerm build after placeholder
+support lands, but current releases will place images incorrectly.
+
 ## Installation
 
 With lazy.nvim:
@@ -111,6 +122,8 @@ require("real-icons").setup({
     pixels = 64,
     padding = 0,
     trim = false,
+    density = "auto",
+    oversample = 1.25,
   },
   color = {
     tint = nil,
@@ -146,6 +159,11 @@ must be `1`.
 `size.pixels` controls the generated PNG size. The default keeps SVG sources and
 rasterizes them into a high-density PNG cache, which gives sharper icons than
 using a small raster source.
+
+`size.density = "auto"` reads each SVG view box and chooses the smallest useful
+raster size with `size.oversample` headroom. This substantially reduces cold
+cache build time without upscaling the source. Set `density = 384` to use the
+previous fixed-density behavior.
 
 If an icon pack has too much transparent padding, set `trim = true`. If icons
 look too large after trimming, add `padding = 4` or `padding = 6`. After changing
@@ -571,7 +589,7 @@ vim.print(icons.available_packs())
 | `:RealIconsHealth` | Run health checks. |
 | `:RealIconsDemo` | Open a demo buffer. |
 | `:RealIconsInstallPack material` | Install Material Icon Theme. |
-| `:RealIconsBuildCache` | Build the PNG cache for the active pack. |
+| `:RealIconsBuildCache` | Build the PNG cache for the active pack in parallel. |
 | `:RealIconsClearCache [name]` | Clear generated PNG cache. |
 | `:RealIconsUsePack [name]` | Switch the active icon pack, or show the current pack. |
 | `:RealIconsPacks` | List configured icon packs. |
@@ -619,12 +637,21 @@ positions instead of absolute pixel placement.
 ## Limitations
 
 - Ghostty and Kitty are the primary supported terminals.
+- WezTerm uses glyph fallback until it implements Kitty Unicode placeholders.
 - Image rendering depends on terminal support for Kitty Graphics Protocol
   Unicode placeholders.
 - Unsupported terminals use glyph fallback when a fallback provider is
   available.
 - Integrations are plugin-specific because each UI exposes different icon hooks.
 - Public APIs may change before v1.0.
+
+## Development
+
+Run the headless test suite with:
+
+```sh
+make test
+```
 
 ## Acknowledgements
 

@@ -182,13 +182,14 @@ function M.capabilities()
     reason = not vim.o.termguicolors and "termguicolors disabled" or detected.reason
   end
   return {
+    graphics = detected.graphics == true,
     images = images,
     renderer = M.backend(),
     terminal = detected.terminal,
     protocol = detected.protocol,
     tmux = detected.tmux,
     tmux_client_term = detected.tmux_client_term,
-    placeholders = true,
+    placeholders = detected.placeholders == true,
     fallback = config.options.fallback.enabled,
     pack = packs.get().name,
     reason = reason,
@@ -289,21 +290,15 @@ function M.build_cache(opts)
   ensure_setup()
   opts = opts or {}
   local pack = packs.get(opts.pack)
-  local count = 0
-  local failed = 0
+  local icons = {}
   for key, source in pairs(pack.definitions) do
-    local icon = {
+    icons[#icons + 1] = {
       pack = pack.name,
       key = key,
       source = source,
     }
-    local ok = cache.ensure(icon, opts)
-    if ok then
-      count = count + 1
-    else
-      failed = failed + 1
-    end
   end
+  local count, failed = cache.ensure_many(icons, opts)
   log.info(string.format("Built %d cached icons%s", count, failed > 0 and ("; failed " .. failed) or ""))
   return count, failed
 end

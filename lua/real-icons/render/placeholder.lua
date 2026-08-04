@@ -78,6 +78,7 @@ local function size_key(size, color)
     dimensions.height,
     size.padding or 0,
     tostring(size.trim ~= false),
+    cache.density_key(size),
     cache.color_key(color),
   }, "x")
 end

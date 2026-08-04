@@ -81,9 +81,17 @@ function M.check()
 
   local detected = backend.detect({ refresh = true })
   if detected.supported then
-    h.ok("Terminal detected: " .. detected.terminal .. " via " .. detected.protocol .. " protocol")
+    if detected.terminal == "wezterm" and detected.forced then
+      h.warn("WezTerm image rendering was forced but Unicode placeholders may render incorrectly")
+    else
+      h.ok("Terminal detected: " .. detected.terminal .. " via " .. detected.protocol .. " protocol")
+    end
   else
-    h.warn("No supported terminal detected; real image rendering will use fallback glyphs")
+    if detected.terminal == "wezterm" then
+      h.warn("WezTerm detected; real-icons will use fallback glyphs")
+    else
+      h.warn("No supported terminal detected; real image rendering will use fallback glyphs")
+    end
     if detected.reason then
       h.info(detected.reason)
     end

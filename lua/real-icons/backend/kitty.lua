@@ -43,8 +43,12 @@ local function send(data)
   end
 end
 
+local function command_data(control, payload)
+  return ESC .. "_G" .. control .. ";" .. (payload or "") .. ESC .. "\\"
+end
+
 local function command(control, payload)
-  send(ESC .. "_G" .. control .. ";" .. (payload or "") .. ESC .. "\\")
+  send(command_data(control, payload))
 end
 
 local function fnv1a(str)
@@ -107,6 +111,10 @@ local function detect_from_env()
   if term_program:find("kitty", 1, true) or vim.env.KITTY_WINDOW_ID or term:find("xterm%-kitty") then
     return "kitty", "environment"
   end
+
+  if term_program:find("wezterm", 1, true) or vim.env.WEZTERM_PANE or vim.env.WEZTERM_EXECUTABLE then
+    return "wezterm", "environment"
+  end
 end
 
 local function detect_from_tmux()
@@ -120,6 +128,9 @@ local function detect_from_tmux()
   end
   if client_term:find("kitty", 1, true) or client_term:find("xterm%-kitty") then
     return "kitty", "tmux", client_term
+  end
+  if client_term:find("wezterm", 1, true) then
+    return "wezterm", "tmux", client_term
   end
   return nil, nil, client_term
 end
@@ -155,6 +166,8 @@ function M.detect(opts)
     detect_cache = {
       supported = false,
       backend = backend,
+      graphics = false,
+      placeholders = false,
       protocol = "none",
       terminal = "unsupported",
       tmux = tmux,
@@ -167,6 +180,8 @@ function M.detect(opts)
     detect_cache = {
       supported = false,
       backend = backend,
+      graphics = false,
+      placeholders = false,
       protocol = "none",
       terminal = "disabled",
       tmux = tmux,
@@ -188,15 +203,23 @@ function M.detect(opts)
   end
 
   local force_kitty = backend == "kitty"
-  local supported = terminal ~= nil or force_kitty
+  local native_placeholders = terminal == "ghostty" or terminal == "kitty"
+  local graphics = native_placeholders or terminal == "wezterm" or force_kitty
+  local placeholders = native_placeholders or force_kitty
+  local supported = placeholders
   local reason
-  if not supported then
+  if terminal == "wezterm" and not force_kitty then
+    reason = "WezTerm does not implement Kitty Unicode placeholders (U=1); using glyph fallback"
+  elseif not supported then
     reason = "no Kitty Graphics Protocol compatible terminal detected"
   end
   detect_cache = {
     supported = supported,
     backend = backend,
-    protocol = supported and "kitty" or "none",
+    forced = force_kitty,
+    graphics = graphics,
+    placeholders = placeholders,
+    protocol = graphics and "kitty" or "none",
     terminal = terminal or (force_kitty and "unknown" or "unsupported"),
     tmux = tmux,
     tmux_client_term = tmux_client_term,
@@ -287,6 +310,16 @@ function M.upload(icon, opts)
 end
 
 function M.clear_uploaded()
+  local delete_commands = {}
+  for image_id in pairs(uploaded_by_id) do
+    delete_commands[#delete_commands + 1] = command_data(
+      "a=d,d=I,q=2,i=" .. image_id
+    )
+  end
+  if #delete_commands > 0 then
+    send(table.concat(delete_commands))
+  end
+
   uploaded_by_id = {}
   uploaded_by_path = {}
   detect_cache = nil

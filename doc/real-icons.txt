@@ -73,6 +73,8 @@ Full configuration:
       pixels = 64,
       padding = 0,
       trim = false,
+      density = "auto",
+      oversample = 1.25,
     },
     color = {
       tint = nil,
@@ -108,6 +110,8 @@ Icon sharpness:
       pixels = 64,
       padding = 0,
       trim = false,
+      density = "auto",
+      oversample = 1.25,
     },
   })
 <
@@ -119,6 +123,17 @@ backend = "disabled" forces glyph fallback.
 cols and rows reserve terminal cells. rows currently must be 1. pixels controls
 the generated PNG size. If a pack has too much transparent padding, set
 trim = true. If icons look too large after trimming, add padding.
+
+density = "auto" reads each SVG view box and chooses a suitable raster density
+with oversample headroom. Set density = 384 to use the previous fixed-density
+behavior.
+
+WEZTERM ~
+
+WezTerm supports the base Kitty Graphics Protocol but does not currently
+support Kitty Unicode placeholders (U=1), which real-icons needs to attach an
+image to a Neovim grid cell. backend = "auto" detects WezTerm and safely uses
+glyph fallback. See https://github.com/wezterm/wezterm/issues/986.
 
 Color transforms are applied while building the PNG cache:
 >
@@ -438,7 +453,7 @@ COMMANDS                                                  *real-icons-commands*
   Install an icon pack. Currently supported: material.
 
 :RealIconsBuildCache
-  Convert icons in the active pack to cached PNG files.
+  Convert icons in the active pack to cached PNG files in parallel.
 
 :RealIconsClearCache [name]
   Clear generated PNG cache.
