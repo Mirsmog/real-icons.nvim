@@ -2,51 +2,50 @@
 
 # real-icons.nvim
 
-**Real image icons inside Neovim, not font glyphs.**
+**Your file icons, in full color.**
 
-[![Neovim 0.10+](https://img.shields.io/badge/Neovim-0.10%2B-57A143?logo=neovim&logoColor=white)](https://neovim.io/)
-[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/Mirsmog/real-icons.nvim?style=flat&logo=github)](https://github.com/Mirsmog/real-icons.nvim/stargazers)
+[Quick start](#quick-start) · [Icon packs](#icon-packs) · [Integrations](#integrations) · [Help](#troubleshooting)
+
+Neovim 0.10+ · Ghostty & Kitty · [MIT](LICENSE)
 
 </div>
 
 <p align="center">
-  <img src="media/hero.webp" alt="Catppuccin image icons rendered by real-icons.nvim in neo-tree" width="100%">
+  <a href="media/showcase/demo.mp4">
+    <img src="media/showcase/preview.gif" alt="Material icons in Neo-tree and Telescope, then previewing and switching to Flow Deep" width="960">
+  </a>
 </p>
 
 <p align="center">
-  <sub><a href="https://github.com/catppuccin/vscode-icons">Catppuccin Icons</a> in <a href="https://github.com/nvim-neo-tree/neo-tree.nvim">neo-tree.nvim</a></sub>
+  <a href="media/showcase/demo.mp4">Watch the full demo (69 seconds)</a>
 </p>
 
-`real-icons.nvim` brings real file and folder icons from PNG and SVG themes to
-explorers, pickers, statuslines, and tablines. It renders through the Kitty
-Graphics Protocol in Ghostty and Kitty, works through configured tmux
-passthrough, and safely falls back to glyphs in other terminals.
+PNG and SVG file icons for Neovim, rendered as images through the Kitty Graphics
+Protocol. Use them in your file tree, fuzzy finder, statusline, and buffer tabs.
 
-## Why real-icons?
+- **Bring your favorite icons.** Material Icon Theme, compatible VS Code icon
+  themes, or a folder of your own images.
+- **Preview before switching.** Browse packs, try them for a session, or save a
+  default from the picker.
+- **Match your workflow.** Ten opt-in integrations, compound file extensions,
+  and custom file and folder rules.
 
-| Real icons | Your icon themes | 10 integrations |
-| --- | --- | --- |
-| Render images with their original colors and shapes. | Use Material Icon Theme, local VS Code themes, or your own files. | Connect popular pickers, explorers, statuslines, and tablines. |
-
-- No patched font is required for image rendering.
-- SVG icons are converted once and cached automatically.
-- Unsupported terminals keep working through `mini.icons` or
-  `nvim-web-devicons` fallback.
-- Directory rules can match full project paths without hardcoded framework
-  behavior.
+Image icons do not need a Nerd Font. Other UI symbols and font-based fallbacks
+may still need one.
 
 ## Quick start
 
 ### Requirements
 
 - Neovim 0.10+
-- Ghostty or Kitty for image rendering
-- `magick` from ImageMagick for SVG themes
+- Ghostty or Kitty for image icons; see [terminal support](#terminal-support)
+- ImageMagick (`magick`) for SVG themes, including Material
 - `curl` and `tar` for installing Material Icon Theme
-- `termguicolors`
+- True color enabled: `vim.opt.termguicolors = true`
 
 ### lazy.nvim
+
+Add this spec to your lazy.nvim plugins:
 
 ```lua
 {
@@ -60,127 +59,79 @@ passthrough, and safely falls back to glyphs in other terminals.
 }
 ```
 
-Replace `neo_tree` with any integration key from the table below, or enable
-several.
+The build step installs Material Icon Theme. Enable the
+[integrations](#integrations) you use; their plugins must be installed and
+configured separately.
 
-To verify the renderer immediately:
-
-```vim
-:RealIcons demo
-```
-
-If Material Icon Theme is unavailable, the plugin uses its bundled fallback
-pack, so installation never leaves Neovim without icons.
-
-## One command
+Restart Neovim, then open the overview:
 
 ```vim
 :RealIcons
 ```
 
-With no arguments, `:RealIcons` opens a small menu. The same actions are
-available as subcommands for configuration and scripts:
+From there, preview icons, choose a pack, or check your setup. If the build step
+was skipped, run `:RealIcons install` to get Material. A small `builtin` pack is
+included as a fallback.
 
-| Command | Purpose |
-| --- | --- |
-| `:RealIcons demo` | Preview the renderer |
-| `:RealIcons packs` | Discover, preview, and switch icon packs |
-| `:RealIcons install` | Install Material Icon Theme |
-| `:RealIcons health` | Run health checks |
-| `:RealIcons help` | Open the help page |
-| `:RealIcons clear-cache [pack]` | Repair a stale or damaged cache |
+<details>
+<summary>Using another package manager</summary>
 
-Tab completion is available for every action. The standard command
-`:checkhealth real-icons` works as well.
-
-## Integrations
-
-All integrations are opt-in. Add the matching key under `integrations`:
-
-| UI | Configuration key | Setup |
-| --- | --- | --- |
-| [neo-tree.nvim](https://github.com/nvim-neo-tree/neo-tree.nvim) | `neo_tree` | automatic |
-| [nvim-tree.lua](https://github.com/nvim-tree/nvim-tree.lua) | `nvim_tree` | automatic |
-| [oil.nvim](https://github.com/stevearc/oil.nvim) | `oil` | automatic |
-| [mini.files](https://github.com/nvim-mini/mini.files) | `mini_files` | automatic |
-| [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) | `telescope` | automatic |
-| [fzf-lua](https://github.com/ibhagwan/fzf-lua) | `fzf_lua` | automatic |
-| [snacks.picker](https://github.com/folke/snacks.nvim) | `snacks_picker` | automatic |
-| [bufferline.nvim](https://github.com/akinsho/bufferline.nvim) | `bufferline` | automatic |
-| [lualine.nvim](https://github.com/nvim-lualine/lualine.nvim) | `lualine` | automatic |
-| [telescope-file-browser.nvim](https://github.com/nvim-telescope/telescope-file-browser.nvim) | `telescope_file_browser` | entry maker |
-
-For example, an fzf-lua and Oil setup only needs:
+Install `Mirsmog/real-icons.nvim`, then call:
 
 ```lua
 require("real-icons").setup({
-  integrations = {
-    fzf_lua = true,
-    oil = true,
-  },
+  integrations = { neo_tree = true },
 })
 ```
 
-Integrations preserve sorting, filtering, git status, diagnostics, and other UI
-behavior.
-
-<details>
-<summary><strong>telescope-file-browser.nvim setup</strong></summary>
-
-```lua
-require("telescope").setup({
-  extensions = {
-    file_browser = {
-      entry_maker = require("real-icons.integrations.telescope_file_browser").entry_maker,
-    },
-  },
-})
-
-require("telescope").load_extension("file_browser")
-```
-
-Caching, multi-selection, git columns, stat columns, and resize behavior
-continue to work with the custom entry maker.
+Run `:RealIcons install` once to download Material Icon Theme.
 
 </details>
 
-More integration details are available in
-[`doc/real-icons.txt`](doc/real-icons.txt) and `:help real-icons-integrations`.
-
 ## Icon packs
 
-Material Icon Theme is the recommended pack and is installed by the lazy.nvim
-build command shown above. The small `builtin` pack is always available.
-
-Run this to browse every configured pack and compatible VS Code theme found on
-your machine:
+Material Icon Theme is the default. To explore other packs:
 
 ```vim
 :RealIcons packs
 ```
 
-The picker scans the standard extension directories for VS Code, VSCodium,
-Cursor, and Windsurf, and previews each theme before switching.
+The picker finds compatible icon themes in your local VS Code, VSCodium,
+Cursor, and Windsurf extension directories, alongside your configured packs.
+
+![Previewing Flow Deep in the icon pack picker](media/showcase/pack-picker.png)
+
+| Key | Action |
+| --- | --- |
+| `j` / `k` or arrows | Browse packs and preview their icons |
+| `/` | Search by name |
+| `Enter` | Apply for this session |
+| `s` | Apply and save as the default |
+| `y` | Copy the pack's configuration fields |
+| `i` | Install Material Icon Theme |
+| `q` / `Esc` | Close |
+
+An explicit `pack = "..."` in your config takes priority over the saved choice
+on restart. Omit it if you prefer choosing your default in the picker.
+
+Themes can provide light variants, expanded folder icons, and distinct icons
+for extensions such as `.test.ts` and `.d.ts`.
 
 <details>
-<summary><strong>More pack and integration previews</strong></summary>
+<summary>Flow Deep and light-mode previews</summary>
 
-### Material Icon Theme
+**Flow Deep with Catppuccin Mocha**
 
-<p align="center">
-  <img src="media/preview-material.png" alt="Material Icon Theme in neo-tree and Telescope" width="100%">
-</p>
+![Flow Deep icons in Neo-tree, Bufferline, and Lualine](media/showcase/workspace-flow.png)
 
-### Flow Icons
+**Material Icon Theme with Catppuccin Latte**
 
-<p align="center">
-  <img src="media/preview-flow.png" alt="Flow Icons in neo-tree and Telescope" width="100%">
-</p>
+![Material icons in a light Neovim workspace](media/showcase/workspace-light.png)
 
 </details>
 
 <details>
-<summary><strong>Use a theme from a custom location</strong></summary>
+<summary>Load a VS Code icon theme from a custom location</summary>
 
 ```lua
 require("real-icons").setup({
@@ -195,131 +146,132 @@ require("real-icons").setup({
 })
 ```
 
-You can also point at a specific manifest instead of a theme identifier.
+Use the theme's ID from its `package.json`, or replace `theme` with
+`manifest = "path/to/icons.json"`, relative to the pack directory.
+
+For a folder of your own PNG or SVG files, see `:help real-icons-packs`.
 
 </details>
 
-Simple local packs, per-file overrides, and the pack loader API are documented
-under `:help real-icons-packs`.
+## Integrations
 
-## Configuration
+Add any of these keys to `opts.integrations` in your plugin spec, or to
+`integrations` in `setup()`. All are off by default.
 
-Most setups only need integration keys. The defaults reserve two terminal
-cells for one icon and automatically cache the correct size and color variant.
+| Plugin | Enable with |
+| --- | --- |
+| [neo-tree.nvim](https://github.com/nvim-neo-tree/neo-tree.nvim) | `neo_tree = true` |
+| [nvim-tree.lua](https://github.com/nvim-tree/nvim-tree.lua) | `nvim_tree = true` |
+| [oil.nvim](https://github.com/stevearc/oil.nvim) | `oil = true` |
+| [mini.files](https://github.com/nvim-mini/mini.files) | `mini_files = true` |
+| [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) | `telescope = true` |
+| [telescope-file-browser.nvim](https://github.com/nvim-telescope/telescope-file-browser.nvim) | `telescope_file_browser = true` + hook below |
+| [fzf-lua](https://github.com/ibhagwan/fzf-lua) | `fzf_lua = true` |
+| [snacks.picker](https://github.com/folke/snacks.nvim) | `snacks_picker = true` |
+| [bufferline.nvim](https://github.com/akinsho/bufferline.nvim) | `bufferline = true` |
+| [lualine.nvim](https://github.com/nvim-lualine/lualine.nvim) | `lualine = true` |
+
+![Flow Deep file and folder icons in nvim-tree, with Bufferline and Lualine](media/showcase/nvim-tree.png)
 
 <details>
-<summary><strong>Path-aware directory rule</strong></summary>
+<summary>telescope-file-browser.nvim: additional setup</summary>
+
+Enable `telescope_file_browser = true`, then add the entry maker to your
+Telescope configuration:
 
 ```lua
-require("real-icons").setup({
-  rules = {
-    directories = {
-      {
-        glob = "**/packages/*/src/**",
-        icon = "folder-packages",
-      },
+require("telescope").setup({
+  extensions = {
+    file_browser = {
+      entry_maker = require("real-icons.integrations.telescope_file_browser").entry_maker,
     },
   },
 })
-```
 
-`*` stays inside one path segment and `**` crosses path separators. Rules are
-generic and can target any project layout.
+require("telescope").load_extension("file_browser")
+```
 
 </details>
 
-The complete option reference, including size, color, pack, and override
-settings, lives in [`doc/real-icons.txt`](doc/real-icons.txt). Inside Neovim,
-run `:help real-icons-setup`.
+Open `:RealIcons` to check connection status. If an integration is missing,
+load its plugin and press `r` in the overview to retry. See
+`:help real-icons-integrations` for adapter-specific options.
+
+## Configuration
+
+Adjust icon size and color, override individual filenames, or assign folder
+icons by project path. The full reference is in
+[`doc/real-icons.txt`](doc/real-icons.txt) and `:help real-icons-setup`.
+
+## Commands
+
+`:RealIcons` opens the overview. These actions are also available directly:
+
+| Command | Action |
+| --- | --- |
+| `:RealIcons demo` | Preview the renderer |
+| `:RealIcons packs` | Browse and switch icon packs |
+| `:RealIcons install` | Download Material Icon Theme |
+| `:RealIcons health` | Check dependencies, terminal support, and integrations |
+| `:RealIcons report` | Copy diagnostics for a bug report |
+| `:RealIcons help` | Open the help page |
+| `:RealIcons clear-cache [pack]` | Clear generated icons for one pack or all packs |
 
 ## Terminal support
 
 | Environment | Result |
 | --- | --- |
-| Ghostty | real image icons |
-| Kitty | real image icons |
-| Ghostty or Kitty inside tmux | real image icons with passthrough enabled |
-| WezTerm | safe glyph fallback |
-| Other terminals and Neovide | glyph fallback when an icon provider is available |
+| Ghostty / Kitty | Image icons |
+| Ghostty / Kitty inside tmux | Image icons with passthrough enabled |
+| Other terminals, including WezTerm, and Neovide | Font icons with `backend = "auto"` |
 
-<details>
-<summary><strong>tmux configuration</strong></summary>
+For tmux, add this to your `.tmux.conf` and reload it:
 
 ```tmux
 set -g allow-passthrough on
 ```
 
-</details>
-
-WezTerm supports the base Kitty Graphics Protocol but not the Unicode
-placeholders used to anchor images to Neovim cells. Until
-[wezterm/wezterm#986](https://github.com/wezterm/wezterm/issues/986) lands,
-`backend = "auto"` selects glyph fallback there.
+Image rendering uses Kitty's Unicode placeholders. The fallback uses
+`mini.icons` or `nvim-web-devicons` when available, otherwise a generic file or
+folder glyph. SVGs are converted in the background and cached; a font icon may
+appear briefly while a new image is being prepared.
 
 ## Troubleshooting
 
-Start with:
+If icons are missing, start with:
 
 ```vim
 :RealIcons health
 ```
 
-It checks Neovim, the terminal, `termguicolors`, ImageMagick, tmux passthrough,
-the selected icon pack, and enabled integrations.
+1. Run `:RealIcons demo`. If it shows images, check that your integration is
+   enabled and its plugin is loaded.
+2. For SVG packs, confirm `magick` is on your `PATH`. Run `:RealIcons install`
+   if Material Icon Theme is missing.
+3. Check [terminal support](#terminal-support), tmux passthrough, and
+   `termguicolors` if the demo also falls back to font icons.
+4. For stale or damaged generated icons, run `:RealIcons clear-cache`.
 
-If icons do not appear:
+Still stuck? [Open an issue](https://github.com/Mirsmog/real-icons.nvim/issues)
+with steps to reproduce and the output of `:RealIcons report` and
+`:checkhealth real-icons`. Review the diagnostics before sharing them.
 
-1. Run `:RealIcons demo` to isolate the renderer from integrations.
-2. Run `:RealIcons install` if Material Icon Theme is missing.
-3. Confirm `magick` is executable for SVG themes.
-4. If tmux is active, confirm `allow-passthrough` is enabled.
-5. Use `:RealIcons clear-cache` only if generated files are damaged or stale.
+## Documentation
 
-When reporting a problem, include the Neovim version, terminal name, plugin
-version, and output from `:checkhealth real-icons`.
-
-## How it works
-
-1. A filename or directory path resolves to an image in the active icon pack.
-2. SVG sources are rasterized once into a size and color-aware PNG cache.
-3. The PNG is uploaded with Kitty Graphics Protocol.
-4. A Unicode placeholder keeps the image attached to its Neovim grid cell.
-
-The placeholder moves with the text grid, so integrations use normal text
-positions instead of absolute pixel coordinates.
-
-## Documentation and development
-
-The help file covers the full configuration, Lua API, pack format, and adapter
-contracts:
-
-```vim
-:help real-icons
-```
-
-Run the local test suite with:
-
-```sh
-make test
-```
+- [Help file](doc/real-icons.txt): configuration, pack formats, Lua API, and
+  integration details. Also available as `:help real-icons`.
+- [Contributing](CONTRIBUTING.md): running tests and reporting issues.
 
 ## Credits
 
-- [Neovim](https://neovim.io/) for the editor and UI primitives.
 - [Kitty Graphics Protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/)
   for terminal image rendering.
 - [Material Icon Theme](https://github.com/material-extensions/vscode-material-icon-theme)
-  for the recommended icon pack.
-- [Catppuccin Icons](https://github.com/catppuccin/vscode-icons) and
-  [Flow Icons](https://github.com/thang-nm/Flow-Icons) for themes shown in the
-  previews.
-- Ghostty and Kitty for implementing Unicode image placeholders.
+  and [Flow Icons](https://github.com/thang-nm/Flow-Icons) for the icon packs
+  shown here.
+- [Catppuccin](https://github.com/catppuccin/nvim) for the Mocha and Latte
+  colorschemes in the demo.
 
 ## License
 
-`real-icons.nvim` is licensed under the [MIT License](LICENSE). Installed icon
-packs keep their upstream licenses.
-
-<p align="center">
-  If real-icons.nvim makes your setup better, consider giving the project a star.
-</p>
+[MIT](LICENSE). Icon packs retain their upstream licenses.
