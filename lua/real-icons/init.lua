@@ -6,10 +6,12 @@ local packs = require("real-icons.packs")
 local renderer = require("real-icons.render.placeholder")
 local resolver = require("real-icons.resolver")
 local backend = require("real-icons.backend.kitty")
+local events = require("real-icons.events")
 
 local M = {}
 
 local did_setup = false
+local integration_states = {}
 local integration_order = {
   "oil",
   "bufferline",
@@ -42,7 +44,7 @@ local function resolve_icon(category, name, opts)
   return resolver.resolve(category, name, opts), opts or {}
 end
 
-local function setup_integration(name)
+local function attempt_integration(name)
   local module = integration_modules[name]
   if not module then
     return false, "unknown integration: " .. tostring(name)
@@ -66,8 +68,29 @@ local function setup_integration(name)
   return true
 end
 
+local function setup_integration(name)
+  if integration_states[name] and integration_states[name].status == "loading" then
+    return true
+  end
+  integration_states[name] = { enabled = true, status = "loading" }
+  local ok, err = attempt_integration(name)
+  integration_states[name] = {
+    enabled = true,
+    status = ok and "ready" or "error",
+    error = not ok and tostring(err or "integration setup failed") or nil,
+  }
+  if ok and name == "telescope_file_browser" then
+    integration_states[name].status = "manual"
+    integration_states[name].error =
+      "Configure the entry_maker hook; see :help real-icons-integrations"
+  end
+  return ok, err
+end
+
 function M.setup(opts)
   config.setup(opts)
+  integration_states = {}
+  cache.cancel_pending()
   packs.clear_cache()
   fallback.clear_cache()
   resolver.clear_cache()
@@ -77,9 +100,13 @@ function M.setup(opts)
 
   for _, name in ipairs(integration_order) do
     if config.options.integrations[name] then
-      setup_integration(name)
+      local ok, err = setup_integration(name)
+      if not ok then
+        log.warn(name .. ": " .. tostring(err) .. ". Run :RealIcons health for details.")
+      end
     end
   end
+  events.changed("setup")
 end
 
 local function ensure_setup()
@@ -91,13 +118,17 @@ end
 function M.get(category, name, opts)
   ensure_setup()
   local segment = M.segment(category, name, opts)
-  return segment.text, segment.hl, segment.is_default == true, {
-    width = segment.width,
-    source = segment.source,
-    image = segment.image == true,
-    fallback = segment.fallback == true,
-    icon = segment.icon,
-  }
+  return segment.text,
+    segment.hl,
+    segment.is_default == true,
+    {
+      width = segment.width,
+      source = segment.source,
+      image = segment.image == true,
+      fallback = segment.fallback == true,
+      pending = segment.pending == true,
+      icon = segment.icon,
+    }
 end
 
 M.icon = M.get
@@ -134,17 +165,10 @@ function M.clear(bufnr)
   renderer.clear(bufnr or vim.api.nvim_get_current_buf())
 end
 
-local function clear_rendered_icons()
-  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-    if vim.api.nvim_buf_is_loaded(bufnr) then
-      renderer.clear(bufnr)
-    end
-  end
-end
-
 local function refresh_known_integrations()
-  local ok_oil, oil = pcall(require, "real-icons.integrations.oil")
-  if ok_oil then
+  renderer.refresh()
+  local oil = package.loaded["real-icons.integrations.oil"]
+  if oil and config.options.integrations.oil then
     for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
       if vim.api.nvim_buf_is_loaded(bufnr) and vim.bo[bufnr].filetype == "oil" then
         pcall(oil.refresh, bufnr)
@@ -152,9 +176,63 @@ local function refresh_known_integrations()
     end
   end
 
-  local ok_lualine, lualine = pcall(require, "lualine")
-  if ok_lualine and type(lualine.refresh) == "function" then
+  local lualine = package.loaded["lualine"]
+  if lualine and type(lualine.refresh) == "function" then
     pcall(lualine.refresh)
+  end
+
+  local snacks = package.loaded["snacks.picker"]
+  if config.options.integrations.snacks_picker and snacks and type(snacks.get) == "function" then
+    for _, picker in ipairs(snacks.get({ tab = false })) do
+      if picker.list and type(picker.list.update) == "function" then
+        pcall(picker.list.update, picker.list, { force = true })
+      end
+    end
+  end
+
+  local manager = package.loaded["neo-tree.sources.manager"]
+  local neo_renderer = package.loaded["neo-tree.ui.renderer"]
+  if config.options.integrations.neo_tree and manager and neo_renderer then
+    for _, winid in ipairs(vim.api.nvim_list_wins()) do
+      local ok, state = pcall(manager.get_state_for_window, winid)
+      if ok and state then
+        pcall(neo_renderer.redraw, state)
+      end
+    end
+  end
+
+  local tree_api = package.loaded["nvim-tree.api"]
+  local tree = tree_api and tree_api.tree
+  if
+    config.options.integrations.nvim_tree
+    and tree
+    and type(tree.reload) == "function"
+    and (type(tree.is_visible) ~= "function" or tree.is_visible())
+  then
+    local ok, err = pcall(tree.reload)
+    if not ok then
+      integration_states.nvim_tree = {
+        enabled = true,
+        status = "error",
+        error = "Refresh failed: " .. tostring(err),
+      }
+    end
+  end
+
+  local files = package.loaded["mini.files"]
+  if config.options.integrations.mini_files and files and type(files.refresh) == "function" then
+    local modified = false
+    for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.bo[bufnr].filetype == "minifiles" and vim.bo[bufnr].modified then
+        modified = true
+      end
+    end
+    if not modified then
+      pcall(
+        files.refresh,
+        { content = { prefix = require("real-icons.integrations.mini_files").prefix } }
+      )
+    end
   end
 
   vim.cmd("redrawstatus")
@@ -219,7 +297,7 @@ end
 
 function M.select_pack()
   ensure_setup()
-  require("real-icons.ui.select_pack").open()
+  return require("real-icons.ui.select_pack").open()
 end
 
 function M.enable_integration(name)
@@ -229,6 +307,44 @@ function M.enable_integration(name)
   end
   config.enable_integration(name)
   return setup_integration(name)
+end
+
+function M.integration_status()
+  ensure_setup()
+  local result = {}
+  for _, name in ipairs(integration_order) do
+    result[name] = vim.deepcopy(integration_states[name] or {
+      enabled = false,
+      status = "disabled",
+    })
+    local adapter = package.loaded[integration_modules[name]]
+    if
+      result[name].enabled
+      and result[name].status == "ready"
+      and adapter
+      and type(adapter.is_patched) == "function"
+      and not adapter.is_patched()
+    then
+      result[name].status = "waiting"
+      result[name].error = "Waiting for the target plugin to load"
+    end
+  end
+  return result
+end
+
+function M.retry_integrations()
+  ensure_setup()
+  local states = M.integration_status()
+  for _, name in ipairs(integration_order) do
+    if
+      config.options.integrations[name]
+      and states[name].status ~= "ready"
+      and states[name].status ~= "manual"
+    then
+      setup_integration(name)
+    end
+  end
+  return M.integration_status()
 end
 
 function M.use_pack(name, opts)
@@ -243,14 +359,21 @@ function M.use_pack(name, opts)
     return false, "unknown icon pack: " .. name
   end
 
+  if opts.save then
+    local saved, save_err = require("real-icons.preferences").save(name)
+    if not saved then
+      return false, save_err
+    end
+  end
+
   config.options.pack = name
+  cache.cancel_pending()
   packs.clear_cache()
   fallback.clear_cache()
   resolver.clear_cache()
   backend.clear_uploaded()
   renderer.reset_cache()
-  clear_rendered_icons()
-  refresh_known_integrations()
+  events.changed("pack")
 
   vim.api.nvim_exec_autocmds("User", {
     pattern = "RealIconsPackChanged",
@@ -269,7 +392,33 @@ end
 
 function M.install_pack(name, opts)
   ensure_setup()
+  opts = opts or {}
   local target = name or config.options.pack
+  if opts.async then
+    local on_complete = opts.on_complete
+    local async_opts = vim.tbl_extend("force", {}, opts, {
+      on_complete = function(ok, err)
+        if ok then
+          if target == config.options.pack then
+            M.use_pack(target, { notify = false })
+          end
+          if opts.notify ~= false then
+            log.info("Installed Material Icon Theme")
+          end
+        else
+          log.error(err)
+        end
+        if on_complete then
+          on_complete(ok, err)
+        end
+      end,
+    })
+    local ok, err = packs.install_async(target, async_opts)
+    if not ok then
+      log.error(err)
+    end
+    return ok, err
+  end
   local ok, err = packs.install(target, opts)
   if not ok then
     log.error(err)
@@ -288,8 +437,7 @@ function M.clear_cache(pack)
   end
   backend.clear_uploaded()
   renderer.reset_cache()
-  clear_rendered_icons()
-  refresh_known_integrations()
+  events.changed("clear-cache")
   log.info("Icon cache cleared")
   return true
 end
@@ -307,7 +455,9 @@ function M.build_cache(opts)
     }
   end
   local count, failed = cache.ensure_many(icons, opts)
-  log.info(string.format("Built %d cached icons%s", count, failed > 0 and ("; failed " .. failed) or ""))
+  log.info(
+    string.format("Built %d cached icons%s", count, failed > 0 and ("; failed " .. failed) or "")
+  )
   return count, failed
 end
 
@@ -350,5 +500,34 @@ function M.demo()
     renderer.render(bufnr, row, 0, icon)
   end
 end
+
+vim.api.nvim_create_autocmd("User", {
+  group = vim.api.nvim_create_augroup("RealIconsIntegrations", { clear = true }),
+  pattern = "LazyLoad",
+  callback = function()
+    if did_setup then
+      M.retry_integrations()
+    end
+  end,
+})
+
+vim.api.nvim_create_autocmd("User", {
+  group = "RealIconsIntegrations",
+  pattern = "RealIconsUpdated",
+  callback = function(args)
+    if did_setup then
+      if
+        type(args.data) == "table"
+        and type(args.data.reasons) == "table"
+        and args.data.reasons.colorscheme
+      then
+        packs.clear_cache()
+        resolver.clear_cache()
+        fallback.clear_cache()
+      end
+      refresh_known_integrations()
+    end
+  end,
+})
 
 return M

@@ -13,6 +13,11 @@ local supported_formats = {
   webp = true,
 }
 local svg_dimensions_cache = {}
+local pending = {}
+local queue = {}
+local running = 0
+local failed_jobs = {}
+local serial = 0
 
 local function safe_name(value)
   return (value:gsub("[^%w%._%-]+", "_"))
@@ -104,10 +109,8 @@ local function svg_dimensions(path)
   uv.fs_close(fd)
 
   local tag = data:match("<svg[%s%S]->")
-  local viewbox = tag and (
-    tag:match('viewBox%s*=%s*"([^"]+)"')
-    or tag:match("viewBox%s*=%s*'([^']+)'")
-  )
+  local viewbox = tag
+    and (tag:match('viewBox%s*=%s*"([^"]+)"') or tag:match("viewBox%s*=%s*'([^']+)'"))
   local values = {}
   for value in (viewbox or ""):gmatch("[^,%s]+") do
     values[#values + 1] = tonumber(value)
@@ -154,10 +157,9 @@ function M.density(size, source)
   end
 
   local oversample = math.max(1, tonumber(size.oversample) or 1.25)
-  local density = math.ceil(math.max(
-    target_width / source_width,
-    target_height / source_height
-  ) * 96 * oversample)
+  local density = math.ceil(
+    math.max(target_width / source_width, target_height / source_height) * 96 * oversample
+  )
   return math.max(1, math.min(4096, density))
 end
 
@@ -232,7 +234,13 @@ function M.target(icon, size, color)
   if not pack_dir then
     return nil, err
   end
-  local name = safe_name(tostring(icon.pack) .. "__" .. tostring(icon.key))
+  local source = icon.source or icon.asset or ""
+  local stat = uv.fs_stat(source)
+  local identity = table.concat(
+    { source, stat and stat.size or 0, stat and stat.mtime.sec or 0, stat and stat.mtime.nsec or 0 },
+    "|"
+  )
+  local name = safe_name(tostring(icon.key)):sub(1, 96) .. "-" .. vim.fn.sha256(identity):sub(1, 12)
   return path_util.join(pack_dir, variant(size, color), name .. ".png")
 end
 
@@ -371,7 +379,13 @@ local function prepare(icon, opts)
     color = config.options.color
   end
   local color_transform = M.has_color_transform(color)
-  if ext == "png" and png_signature(source) and not color_transform then
+  if
+    ext == "png"
+    and png_signature(source)
+    and not color_transform
+    and not size.trim
+    and (tonumber(size.padding) or 0) == 0
+  then
     return { path = source }
   end
 
@@ -384,7 +398,12 @@ local function prepare(icon, opts)
     return nil, target_err
   end
   local target_stat = uv.fs_stat(target)
-  if target_stat and target_stat.mtime.sec >= file_mtime(source) then
+  if
+    target_stat
+    and target_stat.size > 8
+    and target_stat.mtime.sec >= file_mtime(source)
+    and png_signature(target)
+  then
     return { path = target }
   end
 
@@ -418,6 +437,110 @@ function M.ensure(icon, opts)
     return nil, err
   end
   return prepared.path
+end
+
+local pump
+
+local function finish(task, result)
+  running = running - 1
+  local err
+  if not task.cancelled then
+    if result.code ~= 0 then
+      err = vim.trim(result.stderr or result.stdout or "")
+      if err == "" then
+        err = "Icon conversion failed or timed out (exit " .. tostring(result.code) .. ")"
+      end
+    elseif not png_signature(task.temporary) then
+      err = "Icon conversion did not produce a PNG"
+    else
+      local ok, rename_err = uv.fs_rename(task.temporary, task.path)
+      if not ok then
+        err = rename_err
+      end
+    end
+    pending[task.path] = nil
+    failed_jobs[task.path] = err
+  end
+  uv.fs_unlink(task.temporary)
+  if not task.cancelled then
+    for callback in pairs(task.callbacks) do
+      pcall(callback, not err and task.path or nil, err)
+    end
+  end
+  pump()
+end
+
+pump = function()
+  while running < 2 and #queue > 0 do
+    local task = table.remove(queue, 1)
+    if not task.cancelled then
+      running = running + 1
+      local ok, process = pcall(
+        vim.system,
+        task.command,
+        { text = true, timeout = 10000 },
+        function(result)
+          vim.schedule(function()
+            finish(task, result)
+          end)
+        end
+      )
+      if ok then
+        task.process = process
+      else
+        vim.schedule(function()
+          finish(task, { code = -1, stderr = tostring(process) })
+        end)
+      end
+    end
+  end
+end
+
+-- Ready assets return immediately. Cold assets are deduplicated and prepared
+-- by a bounded queue; callers keep rendering their fallback until notified.
+function M.ensure_async(icon, opts, callback)
+  local prepared, err = prepare(icon, opts)
+  if not prepared then
+    return nil, err
+  end
+  if not prepared.command then
+    return prepared.path
+  end
+  if failed_jobs[prepared.path] then
+    return nil, failed_jobs[prepared.path]
+  end
+  local task = pending[prepared.path]
+  if not task then
+    serial = serial + 1
+    task = prepared
+    task.callbacks = {}
+    task.temporary = task.path .. "." .. vim.fn.getpid() .. "-" .. serial .. ".tmp.png"
+    task.command = vim.deepcopy(task.command)
+    task.command[#task.command] = task.temporary
+    pending[task.path] = task
+    queue[#queue + 1] = task
+  end
+  if callback then
+    task.callbacks[callback] = true
+  end
+  pump()
+  return nil, "pending"
+end
+
+function M.cancel_pending()
+  for _, task in pairs(pending) do
+    task.cancelled = true
+    if task.process then
+      pcall(task.process.kill, task.process, 15)
+    end
+  end
+  pending = {}
+  queue = {}
+  failed_jobs = {}
+end
+
+function M.status()
+  return { pending = vim.tbl_count(pending), running = running, failed = vim.tbl_count(failed_jobs) }
 end
 
 local function parallelism(opts)
@@ -552,6 +675,7 @@ function M.clear(pack)
   if not target then
     return false, err
   end
+  M.cancel_pending()
   if path_util.exists(target) then
     vim.fn.delete(target, "rf")
   end

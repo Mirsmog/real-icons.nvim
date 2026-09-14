@@ -4,3 +4,16 @@
 /.tmp
 /tmp
 
+# Local demo configuration, sample app, and recording tools.
+/dev/
+/.local-media/
+
+# Only the selected README media belongs in the repository.
+/media/*
+!/media/showcase/
+/media/showcase/*
+!/media/showcase/preview.gif
+!/media/showcase/pack-picker.png
+!/media/showcase/nvim-tree.png
+!/media/showcase/workspace-flow.png
+!/media/showcase/workspace-light.png

@@ -379,10 +379,11 @@ local function patch_window(win)
   local original_new = win.new
   win._real_icons_original_new = original_new
   win.new = function(opts)
-    if type(opts) == "table"
-        and opts._type == "file"
-        and not opts._is_fzf_tmux
-        and not opts._real_icons_on_create
+    if
+      type(opts) == "table"
+      and opts._type == "file"
+      and not opts._is_fzf_tmux
+      and not opts._real_icons_on_create
     then
       opts.winopts = opts.winopts or {}
       local user_on_create = opts.winopts.on_create
@@ -439,7 +440,7 @@ function M.setup()
   })
   api.nvim_create_autocmd("User", {
     group = group,
-    pattern = "RealIconsPackChanged",
+    pattern = "RealIconsUpdated",
     callback = refresh_attached,
   })
   patched = true

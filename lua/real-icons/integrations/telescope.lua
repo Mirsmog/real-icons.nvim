@@ -47,7 +47,11 @@ function M.gen_from_file(opts)
     entry.display = function(display_entry)
       local display, path_style = base_display(display_entry)
       local path = icon_path(display_entry)
-      if display_entry._real_icons_path ~= path or not display_entry._real_icons_segment then
+      if
+        display_entry._real_icons_path ~= path
+        or not display_entry._real_icons_segment
+        or display_entry._real_icons_segment.generation ~= renderer.generation
+      then
         local icon = resolver.resolve("file", path, { is_dir = false })
         display_entry._real_icons_path = path
         display_entry._real_icons_segment = renderer.segment(icon)

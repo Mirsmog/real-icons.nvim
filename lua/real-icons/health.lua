@@ -8,22 +8,16 @@ local path_util = require("real-icons.path")
 local M = {}
 
 local integrations = {
-  { "bufferline", { "bufferline" } },
-  { "fzf_lua", { "fzf-lua", "fzf-lua.devicons", "fzf-lua.win" } },
-  { "lualine", { "lualine" } },
-  { "mini_files", { "mini.files" } },
-  { "neo_tree", { "neo-tree.defaults" } },
-  { "nvim_tree", { "nvim-tree" } },
-  { "oil", { "oil", "oil.columns" } },
-  { "snacks_picker", { "snacks.picker.format" } },
-  { "telescope", { "telescope.make_entry" } },
-  {
-    "telescope_file_browser",
-    {
-      "telescope",
-      "telescope._extensions.file_browser.make_entry",
-    },
-  },
+  "bufferline",
+  "fzf_lua",
+  "lualine",
+  "mini_files",
+  "neo_tree",
+  "nvim_tree",
+  "oil",
+  "snacks_picker",
+  "telescope",
+  "telescope_file_browser",
 }
 
 local function health()
@@ -85,7 +79,9 @@ function M.check()
     if detected.terminal == "wezterm" and detected.forced then
       h.warn("WezTerm image rendering was forced but Unicode placeholders may render incorrectly")
     else
-      h.ok("Terminal detected: " .. detected.terminal .. " via " .. detected.protocol .. " protocol")
+      h.ok(
+        "Terminal detected: " .. detected.terminal .. " via " .. detected.protocol .. " protocol"
+      )
     end
   else
     if detected.terminal == "wezterm" then
@@ -115,29 +111,34 @@ function M.check()
     end
   end
 
-  for _, integration in ipairs(integrations) do
-    local name = integration[1]
-    local modules = integration[2]
+  local states = require("real-icons").integration_status()
+  for _, name in ipairs(integrations) do
     if config.options.integrations[name] then
-      local missing = {}
-      for _, module in ipairs(modules) do
-        local ok = pcall(require, module)
-        if not ok then
-          missing[#missing + 1] = module
-        end
-      end
-      if #missing == 0 then
-        h.ok("Integration dependency available: " .. name)
+      local state = states[name]
+      if state and state.status == "ready" then
+        h.ok("Integration connected: " .. name)
+      elseif state and state.status == "manual" then
+        h.info(name .. ": " .. state.error)
       else
         h.warn(
-          "Integration enabled but dependencies are not available: "
+          "Integration not connected: "
             .. name
-            .. " ("
-            .. table.concat(missing, ", ")
-            .. ")"
+            .. ": "
+            .. (state and state.error or "not initialized")
         )
+        h.info("Load the target plugin, then use Retry integrations in :RealIcons")
       end
     end
+  end
+
+  local jobs = cache.status()
+  if jobs.failed > 0 then
+    h.warn(
+      string.format("%d icon conversions failed; run :RealIcons clear-cache to retry", jobs.failed)
+    )
+  end
+  if jobs.pending > 0 then
+    h.info(string.format("%d icons are being prepared in the background", jobs.pending))
   end
 
   local pack = packs.get()

@@ -56,6 +56,7 @@ function M.icon_for_node(node)
 
   local icon = resolver.resolve(is_dir and "directory" or "file", node.absolute_path, {
     is_dir = is_dir,
+    expanded = node.open == true,
   })
   local segment = renderer.segment(icon)
   return {
@@ -66,10 +67,7 @@ end
 
 local function decorator_defaults()
   local ok, config = pcall(require, "nvim-tree.config")
-  local configured = ok
-    and config.d
-    and config.d.renderer
-    and config.d.renderer.decorators
+  local configured = ok and config.d and config.d.renderer and config.d.renderer.decorators
   if type(configured) == "table" then
     return copy_list(configured)
   end
@@ -78,8 +76,10 @@ end
 
 local function contains_decorator(decorators, target)
   for _, decorator in ipairs(decorators) do
-    if decorator == target
-        or (type(decorator) == "table" and decorator._real_icons_decorator == true) then
+    if
+      decorator == target
+      or (type(decorator) == "table" and decorator._real_icons_decorator == true)
+    then
       return true
     end
   end
@@ -135,7 +135,11 @@ local function make_decorator(Decorator)
 end
 
 local function setup_decorator(api)
-  if type(api) ~= "table" or type(api.Decorator) ~= "table" or type(api.Decorator.extend) ~= "function" then
+  if
+    type(api) ~= "table"
+    or type(api.Decorator) ~= "table"
+    or type(api.Decorator.extend) ~= "function"
+  then
     return false
   end
 
@@ -145,9 +149,11 @@ local function setup_decorator(api)
   end
 
   local existing_patch = nvim_tree._real_icons_setup_patch
-  if type(existing_patch) == "table"
-      and type(existing_patch.original_setup) == "function"
-      and existing_patch.decorator then
+  if
+    type(existing_patch) == "table"
+    and type(existing_patch.original_setup) == "function"
+    and existing_patch.decorator
+  then
     original_setup = existing_patch.original_setup
     RealIconsDecorator = existing_patch.decorator
     integration_mode = "decorator"

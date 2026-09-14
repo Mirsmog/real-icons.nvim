@@ -40,7 +40,8 @@ local function icon_component(opts)
   return vim.tbl_deep_extend("force", {
     M.component,
     color = nil,
-    padding = { left = 0, right = 1 },
+    -- The following filename component already supplies its leading space.
+    padding = { left = 1, right = 0 },
     separator = "",
     real_icons_lualine = true,
   }, opts or {})
@@ -75,6 +76,14 @@ end
 
 function M.component(opts)
   opts = opts or {}
+  -- Picker prompts, terminals and tree buffers are not filenames. Explicit
+  -- paths/filetypes still allow callers to render a chosen file's icon.
+  if not opts.path and not opts.filetype then
+    local name = vim.api.nvim_buf_get_name(0)
+    if vim.bo.buftype ~= "" or name == "" or name:match("^%w[%w+.-]*://") then
+      return ""
+    end
+  end
   local path = opts.path or path_for_current_buffer()
   local is_dir = opts.is_dir
   if is_dir == nil then
@@ -142,6 +151,10 @@ function M.setup(opts)
 
   lualine.setup = function(user_config)
     return original_setup(M.apply_config(user_config, opts))
+  end
+
+  if type(lualine.get_config) == "function" and vim.fn.exists("#lualine") == 1 then
+    original_setup(M.apply_config(lualine.get_config(), opts))
   end
 
   lualine._real_icons_patched = true

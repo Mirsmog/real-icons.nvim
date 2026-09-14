@@ -1,4 +1,8 @@
-.PHONY: test
+.PHONY: test test-integration
 
 test:
-	nvim --headless -u tests/minimal_init.lua -c 'lua dofile("tests/run.lua")'
+	sh tests/run.sh
+
+test-integration:
+	sh tests/run.sh tests/integrations.lua
+	sh tests/run.sh tests/nvim_tree.lua

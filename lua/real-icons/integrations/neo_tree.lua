@@ -32,6 +32,8 @@ function M.provider(icon, node)
   local is_dir = is_directory(node)
   local resolved = resolver.resolve(is_dir and "directory" or "file", path, {
     is_dir = is_dir,
+    expanded = is_dir and type(node.is_expanded) == "function" and node:is_expanded() or false,
+    is_root = node.level == 0,
   })
   local segment = renderer.segment(resolved)
   return {

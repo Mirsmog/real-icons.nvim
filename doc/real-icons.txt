@@ -46,7 +46,6 @@ Example lazy.nvim spec:
     "Mirsmog/real-icons.nvim",
     build = ":RealIcons install",
     opts = {
-      pack = "material",
       integrations = {
         telescope = true,
       },
@@ -55,6 +54,9 @@ Example lazy.nvim spec:
 <
 
 Full configuration:
+
+The explicit pack field below takes priority over a theme saved in the picker.
+Omit it to use the saved selection, or Material when no selection is saved.
 >
   require("real-icons").setup({
     pack = "material",
@@ -177,11 +179,15 @@ Lua API:
   require("real-icons").use_pack("material")
 <
 
-Switching packs clears uploaded terminal image ids, clears existing real-icons
-extmarks, redraws statusline and tabline UI, and emits:
+Switching packs clears uploaded terminal image ids, refreshes existing
+real-icons extmarks and supported integrations, and emits:
 >
   User RealIconsPackChanged
 <
+The coalesced User RealIconsUpdated event also fires for cache readiness and
+colorscheme changes. Longest extension matches win: widget.test.ts can use a
+different icon from widget.ts. Light theme and expanded folder associations
+are respected when supplied by a VS Code theme.
 
 Custom VS Code icon theme:
 >
@@ -394,6 +400,24 @@ lualine.nvim:
   })
 <
 
+The automatic icon component leaves filename padding to lualine. Unnamed,
+special and URI-based buffers do not receive a file icon. Passing an explicit
+path or filetype to component() overrides this guard.
+
+For a global statusline that keeps the file context while a popup or sidebar
+has focus, configure lualine's ignore_focus option:
+>
+  require("lualine").setup({
+    options = {
+      globalstatus = true,
+      ignore_focus = function(win)
+        return vim.api.nvim_win_get_config(win).relative ~= ""
+          or vim.bo.buftype ~= ""
+      end,
+    },
+  })
+<
+
 Manual lualine component:
 >
   require("lualine").setup({
@@ -444,6 +468,16 @@ For text-based hooks, use segment() when width or metadata is needed:
   return segment.text, segment.hl
 <
 
+Cold images are converted in the background, with at most two conversion
+processes at once. segment.pending and get()'s meta.pending are true while a
+fallback reserves the icon slot. Built-in integrations refresh automatically.
+Custom text integrations should redraw on User RealIconsUpdated and recompute
+their segments; do not retain an old segment across that event. It is coalesced
+and fires after cache preparation, pack changes, and colorscheme changes.
+
+Pass { async = false } as the final options argument if a script needs to wait
+for one image. build_cache() remains a synchronous bulk operation.
+
 Render an icon into a buffer-based UI:
 >
   icons.render(bufnr, row, col, "file", "init.lua")
@@ -476,27 +510,66 @@ Switch icon packs:
 >
   local icons = require("real-icons")
   icons.use_pack("material")
+  icons.use_pack("material", { save = true }) -- Also save the default
   print(icons.pack())
   vim.print(icons.available_packs())
 <
+
+Saved choices are stored under stdpath("state")/real-icons/selection.json.
+Explicit setup({ pack = "..." }) options take priority. Saving a custom local
+theme also saves its pack specification, without rewriting the user's config.
+Delete selection.json to forget the saved default.
+
+Inspect or retry enabled integrations:
+>
+  vim.print(icons.integration_status())
+  icons.retry_integrations()
+<
+Status is ready, waiting, manual, error, or disabled. A manual status means the
+Telescope file browser entry_maker hook still needs to be configured; it is not
+verified automatically. Dependency errors include details. LazyLoad retries
+pending integrations automatically.
+
+Install without blocking an interactive session:
+>
+  icons.install_pack("material", {
+    async = true,
+    on_complete = function(ok, err)
+      if not ok then vim.notify(err) end
+    end,
+  })
+<
+Without async = true, install_pack() waits for completion. A failed asynchronous
+start returns false and an error immediately; on_complete handles a job that
+was accepted. Failed downloads or invalid manifests preserve the installed pack.
 
 ==============================================================================
 COMMANDS                                                  *real-icons-commands*
 
 :RealIcons
-  Open the real-icons.nvim action menu.
+  Show renderer, terminal, pack, and integration status. Keys: p themes,
+  d demo, i install, h health, r retry integrations, y copy diagnostics,
+  ? help, q or <Esc> close.
 
 :RealIcons demo
   Open a renderer preview.
 
 :RealIcons packs
-  Discover, preview, and switch icon packs.
+  Discover and preview configured packs and compatible local editor themes.
+  j/k or arrows browse; / filters; <Enter> applies for this session; s applies
+  and saves the default; y copies pack configuration; i installs Material;
+  q or <Esc> closes. Missing or invalid packs cannot be applied in the picker.
 
 :RealIcons install [name]
   Install Material Icon Theme. Omit [name] or pass material.
+  Runs in the background with a UI attached; waits in headless builds.
 
 :RealIcons health
   Run :checkhealth real-icons.
+
+:RealIcons report
+  Copy renderer and integration diagnostics to the clipboard, or to the unnamed
+  register if no clipboard provider is available. Paste from the register with p.
 
 :RealIcons help
   Open this help page.
@@ -511,7 +584,8 @@ All actions and arguments support command-line completion.
 TROUBLESHOOTING                                    *real-icons-troubleshooting*
 
 Run :RealIcons health first. It checks terminal support, termguicolors,
-ImageMagick, tmux passthrough, and the active icon pack.
+ImageMagick, tmux passthrough, the active icon pack, and enabled integration
+status. :RealIcons report collects a short text report for issue discussions.
 
 If icons do not appear:
 - Confirm you are running inside Ghostty or Kitty.
@@ -526,6 +600,9 @@ If icons are blurry:
 - Use cols = 2 for one-row icons.
 
 Cache paths include size, density, padding, and color settings. Changing those
-options automatically creates a new variant without a manual rebuild.
+options automatically creates a new variant without a manual rebuild. Source
+paths and modification times are included so replaced theme assets are not
+mistaken for older cached files. Failed conversions can be retried with
+:RealIcons clear-cache.
 
 vim:tw=78:ts=8:noet:ft=help:norl:

@@ -5,6 +5,7 @@ local M = {}
 
 local loaded = {}
 local load_errors = {}
+local installing = {}
 
 local material = {
   name = "material",
@@ -63,7 +64,7 @@ function M.installed(name)
   if name == "builtin" then
     return true
   end
-  if name == "material" then
+  if name == "material" and not config.options.packs.material then
     return path_util.exists(path_util.join(material_root(), "dist", "material-icons.json"))
   end
 
@@ -76,8 +77,9 @@ end
 
 function M.get(name)
   name = name or config.options.pack
-  if loaded[name] then
-    return loaded[name]
+  local variant = name .. "|" .. vim.o.background
+  if loaded[variant] then
+    return loaded[variant]
   end
 
   local spec = spec_for(name)
@@ -100,7 +102,7 @@ function M.get(name)
   end
 
   pack = normalize_pack(name, pack)
-  loaded[name] = pack
+  loaded[variant] = pack
   return pack
 end
 
@@ -121,7 +123,8 @@ function M.register(name, spec)
   end
 
   config.options.packs[name] = vim.deepcopy(spec)
-  loaded[name] = nil
+  loaded[name .. "|dark"] = nil
+  loaded[name .. "|light"] = nil
   load_errors[name] = nil
   return true
 end
@@ -152,10 +155,25 @@ function M.last_error(name)
   return load_errors[name or config.options.pack]
 end
 
-local function run(command)
-  local output = vim.fn.system(command)
-  if vim.v.shell_error ~= 0 then
-    return false, path_util.shell_error(command, output)
+function M.spec(name)
+  return vim.deepcopy(spec_for(name))
+end
+
+function M.installing(name)
+  return installing[name or "material"]
+end
+
+local function run(command, opts)
+  if opts._async then
+    return coroutine.yield(command)
+  end
+  local started, process = pcall(vim.system, command, { text = true, timeout = 120000 })
+  if not started then
+    return false, tostring(process)
+  end
+  local result = process:wait()
+  if result.code ~= 0 then
+    return false, path_util.shell_error(command, result.stderr or result.stdout)
   end
   return true
 end
@@ -194,7 +212,18 @@ function M.install(name, opts)
   local staging = path_util.join(parent, ".material-" .. token)
   local backup = path_util.join(parent, ".material-backup-" .. token)
 
-  local ok, err = run({ "curl", "-L", "--fail", "-o", archive, source.url })
+  local ok, err = run({
+    "curl",
+    "-L",
+    "--fail",
+    "--connect-timeout",
+    "10",
+    "--max-time",
+    "120",
+    "-o",
+    archive,
+    source.url,
+  }, opts)
   if not ok then
     remove_path(archive)
     return false, err
@@ -206,7 +235,7 @@ function M.install(name, opts)
     return false, "unable to create " .. staging
   end
 
-  ok, err = run({ "tar", "-xzf", archive, "--strip-components=1", "-C", staging })
+  ok, err = run({ "tar", "-xzf", archive, "--strip-components=1", "-C", staging }, opts)
   if not ok then
     remove_path(archive)
     remove_path(staging)
@@ -218,6 +247,14 @@ function M.install(name, opts)
     remove_path(archive)
     remove_path(staging)
     return false, "downloaded Material Icon Theme is missing dist/material-icons.json"
+  end
+  local valid, decoded = pcall(function()
+    return vim.json.decode(table.concat(vim.fn.readfile(manifest), "\n"))
+  end)
+  if not valid or type(decoded) ~= "table" or type(decoded.iconDefinitions) ~= "table" then
+    remove_path(archive)
+    remove_path(staging)
+    return false, "downloaded Material Icon Theme has an invalid icon manifest"
   end
 
   remove_path(backup)
@@ -242,7 +279,8 @@ function M.install(name, opts)
 
   remove_path(archive)
   remove_path(backup)
-  loaded[name] = nil
+  loaded[name .. "|dark"] = nil
+  loaded[name .. "|light"] = nil
 
   if opts.notify ~= false then
     require("real-icons.log").info("Installed Material Icon Theme " .. source.version)
@@ -252,6 +290,64 @@ end
 
 function M.clear_cache()
   loaded = {}
+  load_errors = {}
+end
+
+function M.install_async(name, opts)
+  name = name or "material"
+  opts = opts or {}
+  if name ~= "material" then
+    return false, "unknown installable pack: " .. tostring(name)
+  end
+  if installing[name] then
+    return false, "Material Icon Theme installation is already running"
+  end
+  installing[name] = "Starting installation"
+  local thread = coroutine.create(function()
+    return M.install(name, { _async = true, notify = false })
+  end)
+  local resume
+  local function complete(ok, err)
+    installing[name] = nil
+    require("real-icons.events").changed("install")
+    if opts.on_complete then
+      opts.on_complete(ok, err)
+    end
+  end
+  resume = function(ok, err)
+    local resumed, result, install_err = coroutine.resume(thread, ok, err)
+    if not resumed then
+      complete(false, tostring(result))
+    elseif coroutine.status(thread) == "dead" then
+      complete(result, install_err)
+    else
+      local command = result
+      installing[name] = command[1] == "curl" and "Downloading Material Icon Theme"
+        or "Unpacking Material Icon Theme"
+      require("real-icons.events").changed("install")
+      local started, process = pcall(
+        vim.system,
+        command,
+        { text = true, timeout = 120000 },
+        function(output)
+          vim.schedule(function()
+            resume(
+              output.code == 0,
+              output.code ~= 0 and path_util.shell_error(command, output.stderr or output.stdout)
+                or nil
+            )
+          end)
+        end
+      )
+      if not started then
+        vim.schedule(function()
+          resume(false, tostring(process))
+        end)
+      end
+    end
+  end
+  resume()
+  return true
 end
 
 return M

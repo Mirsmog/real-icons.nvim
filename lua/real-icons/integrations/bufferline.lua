@@ -49,6 +49,12 @@ function M.setup(opts)
     return original_setup(vim.tbl_deep_extend("force", M.opts(opts), user_config or {}))
   end
 
+  local ok_config, config = pcall(require, "bufferline.config")
+  local current = ok_config and type(config.get) == "function" and config.get()
+  if current and current.user then
+    original_setup(vim.tbl_deep_extend("force", M.opts(opts), current.user))
+  end
+
   bufferline._real_icons_patched = true
   patched = true
   return true

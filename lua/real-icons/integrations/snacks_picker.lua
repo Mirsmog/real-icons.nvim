@@ -22,10 +22,7 @@ local function item_path(item, picker)
 end
 
 local function with_builtin_icons_disabled(picker, fn)
-  local files = picker
-    and picker.opts
-    and picker.opts.icons
-    and picker.opts.icons.files
+  local files = picker and picker.opts and picker.opts.icons and picker.opts.icons.files
   if type(files) ~= "table" then
     return fn()
   end
@@ -48,11 +45,15 @@ function M.icon(item, picker)
 
   local is_dir = item.dir or item.type == "directory"
   local filetype = item.filetype or item.ft
-  if item._real_icons_path == path
-      and item._real_icons_is_dir == is_dir
-      and item._real_icons_filetype == filetype
-      and item._real_icons_segment then
-    return { item._real_icons_segment.text, item._real_icons_segment.hl, virtual = true }
+  if
+    item._real_icons_path == path
+    and item._real_icons_is_dir == is_dir
+    and item._real_icons_filetype == filetype
+    and item._real_icons_segment
+  then
+    if item._real_icons_segment.generation == renderer.generation then
+      return { item._real_icons_segment.text, item._real_icons_segment.hl, virtual = true }
+    end
   end
 
   local icon = resolver.resolve(is_dir and "directory" or "file", path, {

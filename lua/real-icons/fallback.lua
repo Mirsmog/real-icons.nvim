@@ -55,6 +55,10 @@ local function mini(path, opts)
 end
 
 local function devicons(path, opts)
+  -- nvim-web-devicons resolves files, not directories.
+  if category_for(opts) == "directory" then
+    return nil
+  end
   local icons = provider_module("devicons", "nvim-web-devicons")
   if not icons or not icons.get_icon then
     return nil
@@ -130,7 +134,7 @@ function M.get(path, opts)
     result_cache = {}
     result_cache_count = 0
   end
-  result_cache[key] = opts.is_dir and defaults.directory or defaults.default
+  result_cache[key] = category_for(opts) == "directory" and defaults.directory or defaults.default
   result_cache_count = result_cache_count + 1
   return result_cache[key]
 end
