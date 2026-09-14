@@ -61,11 +61,18 @@ local function protect_selected_icon(highlighter, row)
     return
   end
 
-  local marks = vim.api.nvim_buf_get_extmarks(bufnr, telescope_entry_ns, { row, 0 }, { row, -1 }, { details = true })
+  local marks = vim.api.nvim_buf_get_extmarks(
+    bufnr,
+    telescope_entry_ns,
+    { row, 0 },
+    { row, -1 },
+    { details = true }
+  )
   for _, mark in ipairs(marks) do
     local start_col = mark[3]
     local details = mark[4] or {}
-    local hl_group = type(details.hl_group) == "table" and details.hl_group[#details.hl_group] or details.hl_group
+    local hl_group = type(details.hl_group) == "table" and details.hl_group[#details.hl_group]
+      or details.hl_group
     local selected_hl = selected_icon_hl(hl_group)
     if selected_hl and details.end_col then
       vim.api.nvim_buf_set_extmark(bufnr, overlay_ns, row, start_col, {
@@ -83,10 +90,43 @@ local function patch_telescope_highlighter()
   end
 
   if not color_autocmd then
+    local group = vim.api.nvim_create_augroup("RealIconsTelescope", { clear = true })
     vim.api.nvim_create_autocmd("ColorScheme", {
-      group = vim.api.nvim_create_augroup("RealIconsTelescope", { clear = true }),
+      group = group,
       callback = function()
         overlay_hl_cache = {}
+      end,
+    })
+    vim.api.nvim_create_autocmd("User", {
+      group = group,
+      pattern = "RealIconsUpdated",
+      callback = function()
+        overlay_hl_cache = {}
+        local state = package.loaded["telescope.state"]
+        if not state or type(state.get_existing_prompt_bufnrs) ~= "function" then
+          return
+        end
+        for _, bufnr in ipairs(state.get_existing_prompt_bufnrs()) do
+          local status = state.get_status(bufnr)
+          local picker = status and status.picker
+          if
+            picker
+            and picker.manager
+            and vim.api.nvim_buf_is_valid(picker.results_bufnr)
+            and type(picker.entry_adder) == "function"
+          then
+            local count = math.min(picker.manager:num_results(), picker.max_results)
+            for index = 1, count do
+              local entry = picker.manager:get_entry(index)
+              if entry then
+                pcall(picker.entry_adder, picker, index, entry, nil, false)
+              end
+            end
+            if picker.highlighter and type(picker.highlighter.hi_selection) == "function" then
+              pcall(picker.highlighter.hi_selection, picker.highlighter, picker:get_selection_row())
+            end
+          end
+        end
       end,
     })
     color_autocmd = true
@@ -190,9 +230,12 @@ end
 local function entry_segment(entry)
   local path = entry.path or entry.value
   local is_dir = entry.is_dir == true
-  if entry._real_icons_path ~= path
-      or entry._real_icons_is_dir ~= is_dir
-      or not entry._real_icons_segment then
+  if
+    entry._real_icons_path ~= path
+    or entry._real_icons_is_dir ~= is_dir
+    or not entry._real_icons_segment
+    or entry._real_icons_segment.generation ~= renderer.generation
+  then
     local icon = resolver.resolve(is_dir and "directory" or "file", path, {
       is_dir = is_dir,
     })
@@ -242,9 +285,12 @@ function M.entry_maker(opts)
 
     entry.display = function(display_entry)
       local segment = entry_segment(display_entry)
-      local icon_width = upstream_opts.real_icons_width or segment.width or require("real-icons.config").options.size.cols
+      local icon_width = upstream_opts.real_icons_width
+        or segment.width
+        or require("real-icons.config").options.size.cols
       local file_width = compute_file_width(current_status(state), upstream_opts, icon_width)
-      local display, styles = call_base_display(base_display, display_entry, upstream_opts, file_width)
+      local display, styles =
+        call_base_display(base_display, display_entry, upstream_opts, file_width)
       local prefix = segment.text .. sep
       local decorated_styles = {
         { { 0, #segment.text }, segment.hl },
@@ -259,7 +305,9 @@ function M.entry_maker(opts)
 end
 
 function M.setup()
-  patch_telescope_highlighter()
+  if not patch_telescope_highlighter() then
+    return false, "Telescope is not available or its highlighter API is incompatible"
+  end
   return true
 end
 

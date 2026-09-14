@@ -8,12 +8,14 @@ end
 
 local function assert_equal(actual, expected, message)
   if actual ~= expected then
-    fail(string.format(
-      "%s: expected %s, got %s",
-      message or "values differ",
-      vim.inspect(expected),
-      vim.inspect(actual)
-    ))
+    fail(
+      string.format(
+        "%s: expected %s, got %s",
+        message or "values differ",
+        vim.inspect(expected),
+        vim.inspect(actual)
+      )
+    )
   end
 end
 
@@ -124,6 +126,49 @@ test("builtin icon resolution and public API", function()
   assert_equal(meta.fallback, true, "disabled backend should use fallback")
   assert_true(vim.tbl_contains(icons.categories(), "directory"), "directory category")
   assert_true(vim.tbl_contains(icons.list("extension"), "lua"), "lua extension")
+end)
+
+test("nvim-tree refresh uses the public API and reports failures", function()
+  local visible, broken, calls = true, false, 0
+  with_modules({
+    ["nvim-tree.api"] = {
+      tree = {
+        is_visible = function()
+          return visible
+        end,
+        reload = function()
+          calls = calls + 1
+          if broken then
+            error("reload failed")
+          end
+        end,
+      },
+    },
+    ["real-icons.integrations.nvim_tree"] = {
+      setup = function()
+        return true
+      end,
+    },
+  }, {}, function()
+    local icons = require("real-icons")
+    icons.setup({ backend = "disabled", integrations = { nvim_tree = true } })
+    local function refresh()
+      vim.api.nvim_exec_autocmds(
+        "User",
+        { pattern = "RealIconsUpdated", data = { reasons = { cache = true } } }
+      )
+    end
+    refresh()
+    assert_equal(calls, 1)
+    visible = false
+    refresh()
+    assert_equal(calls, 1, "hidden trees are not reloaded")
+    visible, broken = true, true
+    refresh()
+    local state = icons.integration_status().nvim_tree
+    assert_equal(state.status, "error")
+    assert_true(state.error:find("reload failed", 1, true), "refresh error must remain visible")
+  end)
 end)
 
 test("one root command exposes the complete user workflow", function()
@@ -318,7 +363,10 @@ test("adaptive SVG density", function()
   }, source)
 
   local ok, err = xpcall(function()
-    assert_equal(cache.density({ pixels = 64, padding = 0, density = "auto", oversample = 1.25 }, source), 320)
+    assert_equal(
+      cache.density({ pixels = 64, padding = 0, density = "auto", oversample = 1.25 }, source),
+      320
+    )
     assert_equal(cache.density({ pixels = 64, padding = 0, density = 384 }, source), 384)
     assert_true(cache.density_key({ density = "auto", oversample = 1.25 }):match("dauto") ~= nil)
   end, debug.traceback)
@@ -594,6 +642,42 @@ test("mini.files integration uses the official content prefix hook", function()
   end)
 end)
 
+test("lualine hides icons for special buffers and avoids duplicated padding", function()
+  require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+  local integration = require("real-icons.integrations.lualine")
+  local config = integration.apply_config({ sections = { lualine_c = { "filename" } } })
+  assert_equal(config.sections.lualine_c[1].padding.left, 1, "gap before icon")
+  assert_equal(
+    config.sections.lualine_c[1].padding.right,
+    0,
+    "filename owns the gap after the icon"
+  )
+  local previous = vim.api.nvim_get_current_buf()
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(buf)
+  local ok, err = xpcall(function()
+    assert_equal(integration.component(), "", "unnamed scratch")
+    for _, ft in ipairs({ "TelescopePrompt", "neo-tree", "NvimTree", "fzf", "realiconslab" }) do
+      vim.bo[buf].filetype = ft
+      assert_equal(integration.component(), "", ft .. " is not a file")
+    end
+    assert_true(
+      integration.component({ path = "/project/init.lua" }) ~= "",
+      "explicit file context"
+    )
+    vim.bo[buf].buftype = ""
+    vim.bo[buf].filetype = "lua"
+    assert_equal(integration.component(), "", "unnamed normal buffer")
+    vim.api.nvim_buf_set_name(buf, "/tmp/real-icons-lualine-context.lua")
+    assert_true(integration.component() ~= "", "real named buffer")
+    vim.api.nvim_buf_set_name(buf, "oil:///tmp/real-icons-lualine-context")
+    assert_equal(integration.component(), "", "virtual URI")
+  end, debug.traceback)
+  vim.api.nvim_set_current_buf(previous)
+  vim.api.nvim_buf_delete(buf, { force = true })
+  assert_true(ok, err)
+end)
+
 test("neo-tree integration uses the official icon provider", function()
   local defaults = {
     default_component_configs = {
@@ -738,11 +822,7 @@ test("nvim-tree integration registers the public Decorator API", function()
       nvim_tree.setup({ renderer = { decorators = { "Git", custom_decorator } } })
       assert_equal(applied.renderer.decorators[1], "Git", "first user decorator")
       assert_equal(applied.renderer.decorators[2], custom_decorator, "custom user decorator")
-      assert_equal(
-        applied.renderer.decorators[3],
-        integration.decorator(),
-        "real-icons decorator"
-      )
+      assert_equal(applied.renderer.decorators[3], integration.decorator(), "real-icons decorator")
 
       local repeated = integration.opts(vim.deepcopy(applied))
       assert_equal(#repeated.renderer.decorators, 3, "real-icons decorator is not duplicated")
@@ -996,10 +1076,8 @@ test("fzf-lua integration preserves setup and prepares only an icon slot", funct
       directory = installed_state.dir_icon.icon,
       nbsp = fake_utils.nbsp,
     }
-    local candidate, col = integration._line_entry(
-      "▌ " .. slot.file .. slot.nbsp .. "src/init.lua      │",
-      slot
-    )
+    local candidate, col =
+      integration._line_entry("▌ " .. slot.file .. slot.nbsp .. "src/init.lua      │", slot)
     assert_equal(candidate, "src/init.lua", "visible fzf entry path")
     assert_true(type(col) == "number" and col > 0, "icon overlay column")
 
@@ -1036,6 +1114,8 @@ test("fzf-lua integration preserves setup and prepares only an icon slot", funct
 end)
 
 dofile("tests/resolution.lua")(test, assert_equal, assert_true, with_modules)
+dofile("tests/regressions.lua")(test, assert_equal, assert_true, with_modules)
+dofile("tests/resilience.lua")(test, assert_equal, assert_true)
 
 print(string.format("tests: %d passed, %d skipped, %d failed", passed, skipped, #failures))
 if #failures > 0 then

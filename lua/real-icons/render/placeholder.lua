@@ -1,8 +1,10 @@
 local backend = require("real-icons.backend.kitty")
 local cache = require("real-icons.cache")
 local config = require("real-icons.config")
+local events = require("real-icons.events")
 
 local M = {}
+M.generation = 0
 
 M.ns = vim.api.nvim_create_namespace("real-icons")
 
@@ -11,6 +13,12 @@ local diacritics
 local placeholder_cache = {}
 local segment_cache = {}
 local hl_cache = {}
+local rendered = {}
+
+local function asset_ready()
+  M.generation = M.generation + 1
+  events.changed("cache")
+end
 
 local function init_chars()
   if placeholder_char then
@@ -97,6 +105,7 @@ end
 
 local function with_icon_meta(segment, icon)
   return vim.tbl_extend("force", {}, segment, {
+    generation = M.generation,
     icon = icon,
     is_default = icon.is_default == true,
   })
@@ -108,7 +117,8 @@ local function image_segment(icon, size, cols, rows, opts)
     return segment_cache[key]
   end
 
-  local render_path, cache_err = cache.ensure(icon, { size = size, color = opts.color })
+  local prepare = opts.async == false and cache.ensure or cache.ensure_async
+  local render_path, cache_err = prepare(icon, { size = size, color = opts.color }, asset_ready)
   if not render_path then
     return nil, cache_err
   end
@@ -157,32 +167,19 @@ end
 
 function M.render(bufnr, row, col, icon, opts)
   opts = opts or {}
-  local size = opts.size or config.options.size
-  local cols = opts.cols or size.cols
-  local rows = opts.rows or size.rows
-  cols, rows = normalize_cells(cols, rows)
-  local use_images = opts.image ~= false and backend.supports_terminal() and vim.o.termguicolors
-
-  if use_images then
-    local segment, err = image_segment(icon, size, cols, rows, opts)
-    if segment then
-      return vim.api.nvim_buf_set_extmark(bufnr, M.ns, row, col, {
-        virt_text = { { segment.text .. " ", segment.hl } },
-        virt_text_pos = "inline",
-        priority = opts.priority or 200,
-      })
-    elseif not config.options.fallback.enabled then
-      error(err or "failed to render icon")
-    end
+  if bufnr == 0 then
+    bufnr = vim.api.nvim_get_current_buf()
   end
-
-  if icon.fallback then
-    return vim.api.nvim_buf_set_extmark(bufnr, M.ns, row, col, {
-      virt_text = { { icon.fallback.icon .. " ", icon.fallback.hl or "Normal" } },
-      virt_text_pos = "inline",
-      priority = opts.priority or 200,
-    })
-  end
+  local segment = M.segment(icon, opts)
+  local id = vim.api.nvim_buf_set_extmark(bufnr, M.ns, row, col, {
+    id = opts.id,
+    virt_text = { { segment.text .. " ", segment.hl } },
+    virt_text_pos = "inline",
+    priority = opts.priority or 200,
+  })
+  rendered[bufnr] = rendered[bufnr] or {}
+  rendered[bufnr][id] = { icon = icon, opts = vim.tbl_extend("force", {}, opts, { id = id }) }
+  return id
 end
 
 function M.segment(icon, opts)
@@ -193,18 +190,28 @@ function M.segment(icon, opts)
   cols, rows = normalize_cells(cols, rows)
   local use_images = opts.image ~= false and backend.supports_terminal() and vim.o.termguicolors
 
+  local image_error
   if use_images then
-    local segment = image_segment(icon, size, cols, rows, opts)
+    local segment, err = image_segment(icon, size, cols, rows, opts)
+    image_error = err
     if segment then
       return with_icon_meta(segment, icon)
     end
   end
 
   if icon.fallback then
+    local text = icon.fallback.icon
+    local width = vim.fn.strdisplaywidth(text)
+    if image_error == "pending" then
+      text = text .. string.rep(" ", math.max(0, cols - width))
+      width = math.max(cols, width)
+    end
     return {
-      text = icon.fallback.icon,
+      generation = M.generation,
+      pending = image_error == "pending",
+      text = text,
       hl = icon.fallback.hl or "Normal",
-      width = vim.fn.strdisplaywidth(icon.fallback.icon),
+      width = width,
       source = "fallback",
       image = false,
       fallback = true,
@@ -214,9 +221,11 @@ function M.segment(icon, opts)
   end
 
   return {
-    text = " ",
+    generation = M.generation,
+    pending = image_error == "pending",
+    text = string.rep(" ", cols),
     hl = "Normal",
-    width = 1,
+    width = cols,
     source = "empty",
     image = false,
     fallback = true,
@@ -226,17 +235,66 @@ function M.segment(icon, opts)
 end
 
 function M.clear(bufnr)
+  bufnr = bufnr == 0 and vim.api.nvim_get_current_buf() or bufnr
   vim.api.nvim_buf_clear_namespace(bufnr, M.ns, 0, -1)
+  rendered[bufnr] = nil
+end
+
+function M.refresh()
+  for bufnr, marks in pairs(rendered) do
+    if not vim.api.nvim_buf_is_valid(bufnr) then
+      rendered[bufnr] = nil
+    else
+      for id, request in pairs(marks) do
+        local position = vim.api.nvim_buf_get_extmark_by_id(bufnr, M.ns, id, {})
+        if #position == 0 then
+          marks[id] = nil
+        else
+          local icon = request.icon
+          if icon.category and icon.path then
+            icon = require("real-icons.resolver").resolve(
+              icon.category,
+              icon.path,
+              vim.tbl_extend("force", {}, request.opts, {
+                is_dir = icon.kind == "directory",
+                filetype = icon.filetype,
+              })
+            )
+          end
+          M.render(bufnr, position[1], position[2], icon, request.opts)
+        end
+      end
+    end
+  end
 end
 
 function M.reset_cache()
+  M.generation = M.generation + 1
   segment_cache = {}
   hl_cache = {}
 end
 
+local group = vim.api.nvim_create_augroup("RealIconsRenderer", { clear = true })
 vim.api.nvim_create_autocmd("ColorScheme", {
-  group = vim.api.nvim_create_augroup("RealIconsRenderer", { clear = true }),
-  callback = M.reset_cache,
+  group = group,
+  callback = function()
+    M.reset_cache()
+    events.changed("colorscheme")
+  end,
+})
+vim.api.nvim_create_autocmd("OptionSet", {
+  group = group,
+  pattern = { "background", "termguicolors" },
+  callback = function()
+    M.reset_cache()
+    events.changed("colorscheme")
+  end,
+})
+vim.api.nvim_create_autocmd("BufWipeout", {
+  group = group,
+  callback = function(args)
+    rendered[args.buf] = nil
+  end,
 })
 
 return M

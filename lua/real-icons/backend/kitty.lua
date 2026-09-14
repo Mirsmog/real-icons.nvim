@@ -14,23 +14,25 @@ local detect_cache
 local b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
 local function base64(data)
-  return ((data:gsub(".", function(x)
-    local byte = x:byte()
-    local bits = ""
-    for i = 8, 1, -1 do
-      bits = bits .. (byte % 2 ^ i - byte % 2 ^ (i - 1) > 0 and "1" or "0")
-    end
-    return bits
-  end) .. "0000"):gsub("%d%d%d?%d?%d?%d?", function(x)
-    if #x < 6 then
-      return ""
-    end
-    local c = 0
-    for i = 1, 6 do
-      c = c + (x:sub(i, i) == "1" and 2 ^ (6 - i) or 0)
-    end
-    return b64chars:sub(c + 1, c + 1)
-  end) .. ({ "", "==", "=" })[#data % 3 + 1])
+  return (
+    (data:gsub(".", function(x)
+      local byte = x:byte()
+      local bits = ""
+      for i = 8, 1, -1 do
+        bits = bits .. (byte % 2 ^ i - byte % 2 ^ (i - 1) > 0 and "1" or "0")
+      end
+      return bits
+    end) .. "0000"):gsub("%d%d%d?%d?%d?%d?", function(x)
+      if #x < 6 then
+        return ""
+      end
+      local c = 0
+      for i = 1, 6 do
+        c = c + (x:sub(i, i) == "1" and 2 ^ (6 - i) or 0)
+      end
+      return b64chars:sub(c + 1, c + 1)
+    end) .. ({ "", "==", "=" })[#data % 3 + 1]
+  )
 end
 
 local function send(data)
@@ -104,15 +106,27 @@ local function detect_from_env()
   local term_program = env_lower("TERM_PROGRAM")
   local term = env_lower("TERM")
 
-  if term_program:find("ghostty", 1, true) or vim.env.GHOSTTY_RESOURCES_DIR or vim.env.GHOSTTY_BIN_DIR then
+  if
+    term_program:find("ghostty", 1, true)
+    or vim.env.GHOSTTY_RESOURCES_DIR
+    or vim.env.GHOSTTY_BIN_DIR
+  then
     return "ghostty", "environment"
   end
 
-  if term_program:find("kitty", 1, true) or vim.env.KITTY_WINDOW_ID or term:find("xterm%-kitty") then
+  if
+    term_program:find("kitty", 1, true)
+    or vim.env.KITTY_WINDOW_ID
+    or term:find("xterm%-kitty")
+  then
     return "kitty", "environment"
   end
 
-  if term_program:find("wezterm", 1, true) or vim.env.WEZTERM_PANE or vim.env.WEZTERM_EXECUTABLE then
+  if
+    term_program:find("wezterm", 1, true)
+    or vim.env.WEZTERM_PANE
+    or vim.env.WEZTERM_EXECUTABLE
+  then
     return "wezterm", "environment"
   end
 end
@@ -277,7 +291,8 @@ function M.upload(icon, opts)
     return nil, "asset does not exist: " .. tostring(asset)
   end
 
-  local image_id = uploaded_by_path[asset]
+  local upload_key = asset .. "|" .. tostring(cols) .. "x" .. tostring(rows)
+  local image_id = uploaded_by_path[upload_key]
   if image_id then
     return image_id
   end
@@ -287,7 +302,7 @@ function M.upload(icon, opts)
   end
 
   local alloc_err
-  image_id, alloc_err = allocate_image_id(asset, opts.image_id)
+  image_id, alloc_err = allocate_image_id(upload_key, opts.image_id)
   if not image_id then
     return nil, alloc_err
   end
@@ -304,17 +319,15 @@ function M.upload(icon, opts)
   }, ",")
 
   command(control, base64(asset))
-  uploaded_by_id[image_id] = asset
-  uploaded_by_path[asset] = image_id
+  uploaded_by_id[image_id] = upload_key
+  uploaded_by_path[upload_key] = image_id
   return image_id
 end
 
 function M.clear_uploaded()
   local delete_commands = {}
   for image_id in pairs(uploaded_by_id) do
-    delete_commands[#delete_commands + 1] = command_data(
-      "a=d,d=I,q=2,i=" .. image_id
-    )
+    delete_commands[#delete_commands + 1] = command_data("a=d,d=I,q=2,i=" .. image_id)
   end
   if #delete_commands > 0 then
     send(table.concat(delete_commands))
