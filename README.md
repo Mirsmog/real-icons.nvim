@@ -11,14 +11,15 @@ Neovim 0.10+ · Ghostty & Kitty · [MIT](LICENSE)
 </div>
 
 <p align="center">
-  <a href="media/showcase/demo.mp4">
-    <img src="media/showcase/preview.gif" alt="Material icons in Neo-tree and Telescope, then previewing and switching to Flow Deep" width="960">
-  </a>
+  <img src="media/showcase/preview.gif" alt="Material icons in Neo-tree and Telescope, then previewing and switching to Flow Deep" width="960">
 </p>
 
-<p align="center">
-  <a href="media/showcase/demo.mp4">Watch the full demo (69 seconds)</a>
-</p>
+<details>
+<summary>Watch the full demo (69 seconds)</summary>
+
+https://github.com/user-attachments/assets/d56fa7a2-f057-41ab-8563-3fa246617009
+
+</details>
 
 PNG and SVG file icons for Neovim, rendered as images through the Kitty Graphics
 Protocol. Use them in your file tree, fuzzy finder, statusline, and buffer tabs.
