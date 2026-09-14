@@ -55,12 +55,24 @@ function M.load(name, spec)
     return nil, err
   end
 
+  if vim.o.background == "light" and type(manifest.light) == "table" then
+    manifest = vim.tbl_deep_extend("force", {}, manifest, manifest.light)
+  end
+
   local manifest_dir = vim.fs.dirname(manifest_file)
   local definitions = {}
   for key, value in pairs(manifest.iconDefinitions or {}) do
     if value.iconPath then
       definitions[key] = resolve_relative(manifest_dir, value.iconPath)
     end
+  end
+
+  local function associations(values)
+    local result = {}
+    for key, value in pairs(values or {}) do
+      result[key:lower()] = value
+    end
+    return result
   end
 
   return {
@@ -73,10 +85,10 @@ function M.load(name, spec)
     folder_expanded = manifest.folderExpanded,
     root_folder = manifest.rootFolder,
     root_folder_expanded = manifest.rootFolderExpanded,
-    file_extensions = manifest.fileExtensions or {},
-    file_names = manifest.fileNames or {},
-    folder_names = manifest.folderNames or {},
-    folder_names_expanded = manifest.folderNamesExpanded or {},
+    file_extensions = associations(manifest.fileExtensions),
+    file_names = associations(manifest.fileNames),
+    folder_names = associations(manifest.folderNames),
+    folder_names_expanded = associations(manifest.folderNamesExpanded),
     language_ids = manifest.languageIds or {},
   }
 end

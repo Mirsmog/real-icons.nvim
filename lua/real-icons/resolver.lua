@@ -95,6 +95,18 @@ local function map_value(map, ...)
   return nil
 end
 
+local function extension_value(map, path, opts)
+  if opts.extension then
+    return map_value(map, normalize_extension(opts.extension))
+  end
+  for _, extension in ipairs(path_util.extensions(path)) do
+    local value = map_value(map, extension)
+    if value then
+      return value
+    end
+  end
+end
+
 local function override_maps()
   local overrides = config.options.overrides or {}
   return {
@@ -135,7 +147,7 @@ local function resolve_override(category, path, opts, is_dir, name, lower_name, 
   else
     value = map_value(maps.file_names, lower_name, name)
     if not value then
-      value = map_value(maps.file_extensions, extension)
+      value = extension_value(maps.file_extensions, path, opts)
     end
     if not value and opts.filetype then
       value = map_value(maps.language_ids, opts.filetype)
@@ -162,6 +174,9 @@ local function resolve_cache_key(category, name, opts)
     tostring(opts.filetype or ""),
     tostring(opts.is_dir),
     tostring(opts.fallback == false),
+    tostring(opts.expanded == true),
+    tostring(opts.is_root == true),
+    vim.o.background,
   }, "\31")
 end
 
@@ -195,28 +210,24 @@ function M.resolve(category, name, opts)
     is_dir = path_util.is_dir(path)
   end
 
-  local extension = category == "extension"
-      and normalize_extension(path)
-      or normalize_extension(opts.extension or path_util.extension(path) or "")
+  local extension = category == "extension" and normalize_extension(path)
+    or normalize_extension(opts.extension or path_util.extension(path) or "")
 
   local pack = packs.get(opts.pack)
   local definitions = pack.definitions or {}
   local file_extensions = pack.file_extensions or {}
   local file_names = pack.file_names or {}
   local folder_names = pack.folder_names or {}
+  local expanded = opts.expanded == true
+  local folder = opts.is_root and ((expanded and pack.root_folder_expanded) or pack.root_folder)
+    or (expanded and pack.folder_expanded)
+    or pack.folder
+  folder = folder or pack.folder
   local language_ids = pack.language_ids or {}
   local defaulted = false
   local maps = override_maps()
-  local key, source = resolve_override(
-    category,
-    path,
-    opts,
-    is_dir,
-    basename,
-    lower_name,
-    extension,
-    maps
-  )
+  local key, source =
+    resolve_override(category, path, opts, is_dir, basename, lower_name, extension, maps)
 
   if category == "directory" or is_dir then
     if not key and rules.has_directory_rules(config.options.rules) then
@@ -229,9 +240,12 @@ function M.resolve(category, name, opts)
         return false
       end)
     end
-    key = key or normalize_key(folder_names[lower_name] or folder_names[basename])
+    local expanded_names = expanded and pack.folder_names_expanded or {}
+    key = key
+      or normalize_key(map_value(expanded_names, lower_name, basename))
+      or normalize_key(folder_names[lower_name] or folder_names[basename])
     if not key then
-      key = normalize_key(pack.folder)
+      key = normalize_key(folder)
       defaulted = true
     end
   elseif category == "extension" then
@@ -249,7 +263,7 @@ function M.resolve(category, name, opts)
   else
     key = key or normalize_key(file_names[lower_name] or file_names[basename])
     if not key then
-      key = normalize_key(file_extensions[extension])
+      key = normalize_key(extension_value(file_extensions, path, opts))
     end
     if not key and opts.filetype then
       key = normalize_key(language_ids[opts.filetype])
@@ -262,7 +276,7 @@ function M.resolve(category, name, opts)
 
   source = source or (key and definitions[key])
   if not source and is_dir then
-    key = normalize_key(pack.folder)
+    key = normalize_key(folder)
     source = key and definitions[key]
     defaulted = true
   elseif not source then

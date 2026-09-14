@@ -76,8 +76,9 @@ end
 
 function M.get(name)
   name = name or config.options.pack
-  if loaded[name] then
-    return loaded[name]
+  local variant = name .. "|" .. vim.o.background
+  if loaded[variant] then
+    return loaded[variant]
   end
 
   local spec = spec_for(name)
@@ -100,7 +101,7 @@ function M.get(name)
   end
 
   pack = normalize_pack(name, pack)
-  loaded[name] = pack
+  loaded[variant] = pack
   return pack
 end
 
@@ -121,7 +122,8 @@ function M.register(name, spec)
   end
 
   config.options.packs[name] = vim.deepcopy(spec)
-  loaded[name] = nil
+  loaded[name .. "|dark"] = nil
+  loaded[name .. "|light"] = nil
   load_errors[name] = nil
   return true
 end
@@ -242,7 +244,8 @@ function M.install(name, opts)
 
   remove_path(archive)
   remove_path(backup)
-  loaded[name] = nil
+  loaded[name .. "|dark"] = nil
+  loaded[name .. "|light"] = nil
 
   if opts.notify ~= false then
     require("real-icons.log").info("Installed Material Icon Theme " .. source.version)

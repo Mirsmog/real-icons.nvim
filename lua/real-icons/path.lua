@@ -28,6 +28,17 @@ function M.extension(path)
   return name:match("%.([^.]+)$")
 end
 
+function M.extensions(path)
+  local name = M.basename(path):lower()
+  local result = {}
+  for index = 1, #name - 1 do
+    if name:sub(index, index) == "." then
+      result[#result + 1] = name:sub(index + 1)
+    end
+  end
+  return result
+end
+
 function M.exists(path)
   return path ~= nil and uv.fs_stat(path) ~= nil
 end

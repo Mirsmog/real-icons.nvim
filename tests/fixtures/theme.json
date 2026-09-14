@@ -1,0 +1,15 @@
+{
+  "iconDefinitions": {
+    "plain": { "iconPath": "red.svg" },
+    "test": { "iconPath": "blue.svg" },
+    "types": { "iconPath": "blue.svg" },
+    "open": { "iconPath": "blue.svg" },
+    "light": { "iconPath": "blue.svg" }
+  },
+  "file": "plain",
+  "folder": "plain",
+  "folderExpanded": "open",
+  "fileExtensions": { "ts": "plain", "test.ts": "test", "d.ts": "types" },
+  "fileNames": { "special.test.ts": "plain" },
+  "light": { "file": "light" }
+}

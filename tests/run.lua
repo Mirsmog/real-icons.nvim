@@ -1035,6 +1035,8 @@ test("fzf-lua integration preserves setup and prepares only an icon slot", funct
   end
 end)
 
+dofile("tests/resolution.lua")(test, assert_equal, assert_true, with_modules)
+
 print(string.format("tests: %d passed, %d skipped, %d failed", passed, skipped, #failures))
 if #failures > 0 then
   for _, failure in ipairs(failures) do
