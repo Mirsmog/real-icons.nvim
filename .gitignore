@@ -4,3 +4,10 @@
 /.tmp
 /tmp
 
+# Local demo configuration, sample app, and recording tools.
+/dev/
+/.local-media/
+
+# Only the selected README media belongs in the repository.
+/media/*
+!/media/showcase/
