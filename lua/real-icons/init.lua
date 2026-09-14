@@ -359,6 +359,13 @@ function M.use_pack(name, opts)
     return false, "unknown icon pack: " .. name
   end
 
+  if opts.save then
+    local saved, save_err = require("real-icons.preferences").save(name)
+    if not saved then
+      return false, save_err
+    end
+  end
+
   config.options.pack = name
   cache.cancel_pending()
   packs.clear_cache()

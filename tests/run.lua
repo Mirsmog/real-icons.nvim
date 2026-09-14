@@ -1116,6 +1116,7 @@ end)
 dofile("tests/resolution.lua")(test, assert_equal, assert_true, with_modules)
 dofile("tests/regressions.lua")(test, assert_equal, assert_true, with_modules)
 dofile("tests/resilience.lua")(test, assert_equal, assert_true)
+dofile("tests/ui.lua")(test, assert_equal, assert_true)
 
 print(string.format("tests: %d passed, %d skipped, %d failed", passed, skipped, #failures))
 if #failures > 0 then

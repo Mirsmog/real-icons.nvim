@@ -5,6 +5,7 @@ local command_order = {
   "packs",
   "install",
   "health",
+  "report",
   "help",
   "clear-cache",
 }
@@ -38,7 +39,10 @@ local actions = {
     label = "Install Material Icon Theme",
     max_args = 1,
     run = function(args)
-      return real_icons().install_pack(args[1] or "material")
+      return real_icons().install_pack(
+        args[1] or "material",
+        { async = #vim.api.nvim_list_uis() > 0 }
+      )
     end,
   },
   health = {
@@ -46,6 +50,14 @@ local actions = {
     max_args = 0,
     run = function()
       vim.cmd("checkhealth real-icons")
+      return true
+    end,
+  },
+  report = {
+    label = "Copy diagnostics",
+    max_args = 0,
+    run = function()
+      require("real-icons.preferences").copy(require("real-icons.status").report())
       return true
     end,
   },
@@ -87,24 +99,7 @@ local function action_error(message)
 end
 
 function M.open()
-  local items = {}
-  for _, name in ipairs({ "demo", "packs", "install", "health", "help" }) do
-    items[#items + 1] = {
-      name = name,
-      label = actions[name].label,
-    }
-  end
-
-  vim.ui.select(items, {
-    prompt = "real-icons.nvim",
-    format_item = function(item)
-      return item.label
-    end,
-  }, function(item)
-    if item then
-      M.execute({ item.name })
-    end
-  end)
+  require("real-icons.ui.dashboard").open()
   return true
 end
 
