@@ -12,6 +12,7 @@ local integrations = {
   "fzf_lua",
   "lualine",
   "mini_files",
+  "mini_statusline",
   "neo_tree",
   "nvim_tree",
   "oil",

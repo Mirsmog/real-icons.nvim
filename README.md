@@ -28,7 +28,7 @@ Protocol. Use them in your file tree, fuzzy finder, statusline, and buffer tabs.
   themes, or a folder of your own images.
 - **Preview before switching.** Browse packs, try them for a session, or save a
   default from the picker.
-- **Match your workflow.** Ten opt-in integrations, compound file extensions,
+- **Match your workflow.** Eleven opt-in integrations, compound file extensions,
   and custom file and folder rules.
 
 Image icons do not need a Nerd Font. Other UI symbols and font-based fallbacks
@@ -165,6 +165,7 @@ Add any of these keys to `opts.integrations` in your plugin spec, or to
 | [nvim-tree.lua](https://github.com/nvim-tree/nvim-tree.lua) | `nvim_tree = true` |
 | [oil.nvim](https://github.com/stevearc/oil.nvim) | `oil = true` |
 | [mini.files](https://github.com/nvim-mini/mini.files) | `mini_files = true` |
+| [mini.statusline](https://github.com/nvim-mini/mini.statusline) | `mini_statusline = true` |
 | [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) | `telescope = true` |
 | [telescope-file-browser.nvim](https://github.com/nvim-telescope/telescope-file-browser.nvim) | `telescope_file_browser = true` + hook below |
 | [fzf-lua](https://github.com/ibhagwan/fzf-lua) | `fzf_lua = true` |

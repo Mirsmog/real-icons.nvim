@@ -91,6 +91,7 @@ Omit it to use the saved selection, or Material when no selection is saved.
       fzf_lua = false,
       lualine = false,
       mini_files = false,
+      mini_statusline = false,
       neo_tree = false,
       nvim_tree = false,
       oil = false,
@@ -376,6 +377,22 @@ Manual mini.files setup:
 >
   require("mini.files").setup(require("real-icons.integrations.mini_files").opts())
 <
+
+mini.statusline:
+>
+  require("real-icons").setup({
+    integrations = {
+      mini_statusline = true,
+    },
+  })
+<
+
+The fileinfo section keeps its filetype, encoding, format, and size text
+and replaces only the icon. Terminal, prompt, and sidebar buffers keep
+their text-only fileinfo. Custom content functions that call
+MiniStatusline.section_fileinfo() pick up real icons without changes; use
+require("real-icons.integrations.mini_statusline").component as a standalone
+icon section instead.
 
 bufferline.nvim:
 >

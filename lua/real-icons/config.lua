@@ -33,6 +33,7 @@ M.defaults = {
     fzf_lua = false,
     lualine = false,
     mini_files = false,
+    mini_statusline = false,
     neo_tree = false,
     nvim_tree = false,
     oil = false,
