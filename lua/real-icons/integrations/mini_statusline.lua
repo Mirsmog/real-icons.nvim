@@ -17,6 +17,17 @@ local function statusline_hl(hl)
   return "%#" .. hl .. "#"
 end
 
+local function oil_directory()
+  if vim.bo.filetype ~= "oil" then
+    return nil
+  end
+  local dir = vim.api.nvim_buf_get_name(0):match("^oil://(.*)$")
+  if dir == nil or dir == "" then
+    return nil
+  end
+  return dir
+end
+
 local function filesize()
   local size = math.max(vim.fn.line2byte(vim.fn.line("$") + 1) - 1, 0)
   if size < 1024 then
@@ -54,9 +65,15 @@ end
 function M.section_fileinfo(args)
   args = args or {}
   local filetype = vim.bo.filetype
-  local icon = M.component()
-  if icon == "" and filetype ~= "" then
-    icon = M.component({ filetype = filetype })
+  local dir = oil_directory()
+  local icon
+  if dir then
+    icon = M.component({ path = dir, is_dir = true })
+  else
+    icon = M.component()
+    if icon == "" and filetype ~= "" then
+      icon = M.component({ filetype = filetype })
+    end
   end
   local label = filetype
   if icon ~= "" and label ~= "" then
