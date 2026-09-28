@@ -59,7 +59,11 @@ function M.component(opts)
     is_dir = is_dir,
   })
   local segment = renderer.segment(icon, opts)
-  return statusline_hl(segment.hl) .. segment.text .. "%*"
+  -- Restore the ambient group highlight instead of %*: %* would reset to
+  -- the default StatusLine colors and repaint the rest of the fileinfo
+  -- section (filetype, encoding) in the wrong colors.
+  local restore = opts.restore_hl or "MiniStatuslineFileinfo"
+  return statusline_hl(segment.hl) .. segment.text .. statusline_hl(restore)
 end
 
 function M.section_fileinfo(args)

@@ -392,7 +392,9 @@ and replaces only the icon. Terminal, prompt, and sidebar buffers keep
 their text-only fileinfo. Custom content functions that call
 MiniStatusline.section_fileinfo() pick up real icons without changes; use
 require("real-icons.integrations.mini_statusline").component as a standalone
-icon section instead.
+icon section instead. The component restores the MiniStatuslineFileinfo
+highlight after the icon; pass { restore_hl = "Group" } when embedding it
+in a differently highlighted section.
 
 bufferline.nvim:
 >
