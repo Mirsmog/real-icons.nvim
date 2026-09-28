@@ -17,15 +17,25 @@ local function statusline_hl(hl)
   return "%#" .. hl .. "#"
 end
 
-local function oil_directory()
-  if vim.bo.filetype ~= "oil" then
+-- Component opts for special buffers that the plain guard rejects.
+-- Oil resolves its browsed directory so themed folder icons apply;
+-- fugitive views resolve the synthetic .git directory so the pack's git
+-- folder icon applies. Returns nil when there is nothing special.
+local function special_opts(filetype)
+  if filetype == "oil" then
+    local dir = vim.api.nvim_buf_get_name(0):match("^oil://(.*)$")
+    if dir ~= nil and dir ~= "" then
+      return { path = dir, is_dir = true }
+    end
     return nil
   end
-  local dir = vim.api.nvim_buf_get_name(0):match("^oil://(.*)$")
-  if dir == nil or dir == "" then
-    return nil
+  if filetype == "fugitive" or filetype == "fugitiveblame" then
+    return { path = ".git", is_dir = true }
   end
-  return dir
+  if filetype ~= "" then
+    return { filetype = filetype }
+  end
+  return nil
 end
 
 local function filesize()
@@ -69,15 +79,9 @@ end
 function M.section_fileinfo(args)
   args = args or {}
   local filetype = vim.bo.filetype
-  local dir = oil_directory()
-  local icon
-  if dir then
-    icon = M.component({ path = dir, is_dir = true })
-  else
-    icon = M.component()
-    if icon == "" and filetype ~= "" then
-      icon = M.component({ filetype = filetype })
-    end
+  local icon = M.component()
+  if icon == "" then
+    icon = M.component(special_opts(filetype))
   end
   local label = filetype
   if icon ~= "" and label ~= "" then

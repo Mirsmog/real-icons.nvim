@@ -389,7 +389,8 @@ mini.statusline:
 
 The fileinfo section keeps its filetype, encoding, format, and size text
 and replaces only the icon. Terminal, prompt, and sidebar buffers keep
-their text-only fileinfo. Custom content functions that call
+their text-only fileinfo. Oil buffers show the browsed directory's folder
+icon; fugitive and fugitiveblame buffers show the pack's git folder icon. Custom content functions that call
 MiniStatusline.section_fileinfo() pick up real icons without changes; use
 require("real-icons.integrations.mini_statusline").component as a standalone
 icon section instead. The component restores the MiniStatuslineFileinfo
