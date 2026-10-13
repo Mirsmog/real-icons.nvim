@@ -608,6 +608,75 @@ test("lualine integration inserts an icon without replacing configured component
   end)
 end)
 
+test("lualine replaces native filetype icons while preserving user options", function()
+  local integration = require("real-icons.integrations.lualine")
+  local format = function(value)
+    return value:upper()
+  end
+  local condition = function()
+    return true
+  end
+  for _, group in ipairs({ "sections", "inactive_sections", "tabline", "winbar", "inactive_winbar" }) do
+    for _, component in ipairs({
+      "filetype",
+      { "filetype", colored = false, padding = 2, fmt = format, cond = condition },
+    }) do
+      local user_config = {
+        options = { icons_enabled = true },
+        [group] = { lualine_x = { "encoding", component } },
+      }
+      local original = vim.deepcopy(user_config)
+      local config = integration.apply_config(user_config, { default_section = false })
+      local section = config[group].lualine_x
+      assert_equal(section[1], "encoding", "preceding component")
+      assert_true(section[2].real_icons_lualine, "real icon inserted")
+      local expected = type(component) == "table" and vim.deepcopy(component) or { component }
+      expected.icons_enabled = false
+      assert_true(vim.deep_equal(section[3], expected), "only the native filetype icon is disabled")
+      assert_equal(config.options.icons_enabled, true, "global icon setting")
+      assert_true(vim.deep_equal(user_config, original), "caller configuration is not mutated")
+      assert_true(
+        vim.deep_equal(integration.apply_config(config, { default_section = false }), config),
+        "repeated application is idempotent"
+      )
+    end
+  end
+end)
+
+test("lualine keeps icon-only filetype components free of labels", function()
+  local integration = require("real-icons.integrations.lualine")
+  local component = { "filetype", icon_only = true, padding = 2, separator = "|" }
+  local user_config = { sections = { lualine_x = { component } } }
+  local original = vim.deepcopy(user_config)
+  local config = integration.apply_config(user_config, { default_section = false })
+  local section = config.sections.lualine_x
+  local expected = vim.deepcopy(component)
+  expected[1] = integration.component
+  expected.icons_enabled = false
+  expected.real_icons_lualine = true
+  assert_equal(#section, 1, "icon-only component is replaced in place")
+  assert_true(vim.deep_equal(section[1], expected), "icon-only options are preserved")
+  assert_true(vim.deep_equal(user_config, original), "caller configuration is not mutated")
+end)
+
+test("lualine preserves native icons when it does not replace the filetype icon", function()
+  local integration = require("real-icons.integrations.lualine")
+  local user_config = {
+    options = { icons_enabled = true },
+    sections = { lualine_c = { "filename", { "filetype", icons_enabled = true } } },
+  }
+  local config = integration.apply_config(user_config)
+  assert_equal(config.sections.lualine_c[2], "filename", "filename remains unchanged")
+  assert_true(
+    vim.deep_equal(config.sections.lualine_c[3], user_config.sections.lualine_c[2]),
+    "filetype without a replacement retains its native icon"
+  )
+  assert_true(
+    vim.deep_equal(integration.apply_config(user_config, { auto_insert = false }), user_config),
+    "disabled automatic insertion preserves native icons"
+  )
+end)
+
 test("mini.files integration uses the official content prefix hook", function()
   local applied
   local files = {

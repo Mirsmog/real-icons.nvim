@@ -1,8 +1,8 @@
 local root = assert(
   vim.env.REAL_ICONS_TEST_DEPS,
-  "Set REAL_ICONS_TEST_DEPS to a directory containing lualine, bufferline, telescope, and plenary checkouts"
+  "Set REAL_ICONS_TEST_DEPS to a directory containing lualine, bufferline, telescope, plenary, and devicons checkouts"
 )
-for _, dependency in ipairs({ "lualine", "bufferline", "telescope", "plenary" }) do
+for _, dependency in ipairs({ "lualine", "bufferline", "telescope", "plenary", "devicons" }) do
   local path = root .. "/" .. dependency
   assert(vim.fn.isdirectory(path .. "/lua") == 1, "Missing local dependency: " .. path)
   vim.opt.runtimepath:append(path)
@@ -11,7 +11,12 @@ end
 local icons = require("real-icons")
 local lualine = require("lualine")
 local bufferline = require("bufferline")
-local user_line = { sections = { lualine_c = { "branch", "filename" } } }
+local user_line = {
+  sections = {
+    lualine_c = { "branch", "filename" },
+    lualine_x = { "encoding", "fileformat", "filetype" },
+  },
+}
 lualine.setup(user_line)
 bufferline.setup({ options = { numbers = "ordinal" } })
 icons.setup({
@@ -28,6 +33,10 @@ local function check_line()
     end
   end
   assert(count == 1, "Lualine must contain exactly one real icon")
+  local filetype_section = lualine.get_config().sections.lualine_x
+  assert(filetype_section[3].real_icons_lualine, "Filetype must get a real icon")
+  assert(filetype_section[4][1] == "filetype", "Filetype component must be preserved")
+  assert(filetype_section[4].icons_enabled == false, "Filetype must not draw a second icon")
   assert(
     require("bufferline.config").options.get_element_icon,
     "Bufferline callback was not installed"
@@ -126,9 +135,42 @@ assert(
 )
 vim.api.nvim_win_close(tree_win, true)
 vim.api.nvim_buf_delete(tree_buf, { force = true })
+print("ok - real Lualine preserves file context across popup and tree focus")
+
+for _, component in ipairs({
+  "filetype",
+  { "filetype", colored = false, padding = 2, fmt = string.upper },
+  { "filetype", icon_only = true, padding = 2 },
+}) do
+  local user_config = {
+    options = { component_separators = "", section_separators = "" },
+    sections = {
+      lualine_a = {},
+      lualine_b = {},
+      lualine_c = {},
+      lualine_x = { component },
+      lualine_y = {},
+      lualine_z = {},
+    },
+  }
+  local label = type(component) == "table" and "LUA" or "lua"
+  local gap = type(component) == "table" and "  " or " "
+  local expected = segment.text .. gap .. label
+  local description = type(component)
+  if type(component) == "table" and component.icon_only then
+    expected = segment.text
+    description = "icon-only"
+  end
+  for _ = 1, 2 do
+    lualine.setup(user_config)
+    local line = vim.trim(rendered_line())
+    assert(line == expected, "Expected exactly one filetype icon: " .. vim.inspect(line))
+  end
+  print("ok - real Lualine renders one filetype icon for " .. description .. " configuration")
+end
+
 vim.api.nvim_set_current_buf(original_buf)
 vim.api.nvim_buf_delete(file_buf, { force = true })
-print("ok - real Lualine preserves file context across popup and tree focus")
 
 local send = vim.api.nvim_chan_send
 vim.api.nvim_chan_send = function() end
@@ -186,5 +228,5 @@ print("ok - open Telescope picker refreshes without losing selection or multisel
 
 require("real-icons.backend.kitty").clear_uploaded()
 vim.api.nvim_chan_send = send
-print("integration tests: 6 passed")
+print("integration tests: 9 passed")
 vim.cmd("qa!")

@@ -54,6 +54,19 @@ local function insert_icon(section, opts)
 
   for index, component in ipairs(section) do
     if is_target_component(component) then
+      if component_name(component) == "filetype" then
+        component = type(component) == "table" and component or { component }
+        component.icons_enabled = false
+        if component.icon_only then
+          -- Replace icon-only components in place without exposing a filetype label.
+          section[index] = vim.tbl_deep_extend("force", opts or {}, component, {
+            M.component,
+            real_icons_lualine = true,
+          })
+          return true
+        end
+        section[index] = component
+      end
       table.insert(section, index, icon_component(opts))
       return true
     end
