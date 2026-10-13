@@ -404,6 +404,9 @@ The automatic icon component leaves filename padding to lualine. Unnamed,
 special and URI-based buffers do not receive a file icon. Passing an explicit
 path or filetype to component() overrides this guard.
 
+Automatically decorated filetype components have their native icon disabled
+to avoid duplicates. Components configured with icon_only remain icon-only.
+
 For a global statusline that keeps the file context while a popup or sidebar
 has focus, configure lualine's ignore_focus option:
 >
