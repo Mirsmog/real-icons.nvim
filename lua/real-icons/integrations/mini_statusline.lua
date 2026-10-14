@@ -57,14 +57,12 @@ local function special_opts(filetype)
     end
     return nil
   end
-  if scheme == "fugitive" then
-    if filetype == "fugitive" or filetype == "fugitiveblame" then
-      return { path = ".git", is_dir = true }
-    end
-    if filetype ~= "" then
-      return { filetype = filetype }
-    end
-    return nil
+  -- Blame uses a temporary file, and status can also use the index path.
+  if filetype == "fugitive" or filetype == "fugitiveblame" then
+    return { path = ".git", is_dir = true }
+  end
+  if scheme == "fugitive" and filetype ~= "" then
+    return { filetype = filetype }
   end
   return nil
 end

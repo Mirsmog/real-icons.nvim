@@ -956,9 +956,10 @@ test("mini.statusline renders explicit oil and fugitive icons", function()
     assert_true(integration.setup())
     local cases = {
       { name = "oil:///tmp", filetype = "oil", buftype = "acwrite" },
-      { name = "fugitive:///tmp/.git//abc123:README.md", filetype = "fugitive", buftype = "nofile" },
-      { name = "fugitive:///tmp/.git//abc123:2:README.md", filetype = "fugitiveblame", buftype = "nofile" },
-      { name = "fugitive:///tmp/.git//abc123:init.lua", filetype = "lua", buftype = "nofile" },
+      { name = "fugitive:///tmp/.git//", filetype = "fugitive", buftype = "nowrite" },
+      { name = "/tmp/real-icons-ministatusline.fugitiveblame", filetype = "fugitiveblame", buftype = "nowrite" },
+      { name = "/tmp/real-icons-ministatusline/.git/index", filetype = "fugitive", buftype = "nowrite" },
+      { name = "fugitive:///tmp/.git//0/init.lua", filetype = "lua", buftype = "" },
     }
     for _, case in ipairs(cases) do
       with_ministatusline_buffer(case.name, case.filetype, case.buftype, function()
@@ -966,6 +967,16 @@ test("mini.statusline renders explicit oil and fugitive icons", function()
         assert_true(rendered:sub(1, 2) == "%#", case.filetype .. " renders an icon")
         assert_true(rendered:find(case.filetype, 1, true) ~= nil, case.filetype .. " keeps its label")
         assert_true(rendered ~= original({ trunc_width = 40 }), case.filetype .. " replaces the native icon")
+        if case.filetype == "fugitive" or case.filetype == "fugitiveblame" then
+          local expected = integration.component({ path = ".git", is_dir = true })
+          assert_equal(rendered, expected .. " " .. case.filetype, "Fugitive views use the git folder icon")
+        end
+        vim.b.ministatusline_config = { use_icons = false }
+        assert_equal(
+          stub.section_fileinfo({ trunc_width = 40 }),
+          original({ trunc_width = 40 }),
+          case.filetype .. " respects the host icon setting"
+        )
       end)
     end
     with_ministatusline_buffer(nil, "oil", "acwrite", function()
@@ -1086,6 +1097,28 @@ test("mini.statusline validates APIs before patching", function()
     local integration = require("real-icons.integrations.mini_statusline")
     local ok = integration.setup()
     assert_true(ok == false, "missing host APIs are rejected")
+  end)
+  _G.MiniStatusline = nil
+end)
+
+test("mini.statusline leaves the host unchanged when setup is missing", function()
+  _G.MiniStatusline = nil
+  local host = ministatusline_stub()
+  host.setup = nil
+  local original = host.section_fileinfo
+  with_modules({
+    ["mini.statusline"] = host,
+  }, {
+    "real-icons.integrations.mini_statusline",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local integration = require("real-icons.integrations.mini_statusline")
+    local ok, err = integration.setup()
+    assert_equal(ok, false, "missing setup API is rejected")
+    assert_true(err:find("setup API", 1, true) ~= nil, "the missing API is identified")
+    assert_equal(host.section_fileinfo, original, "the original section is not replaced")
+    assert_equal(host._real_icons_patched, nil, "the host is not marked as patched")
+    assert_equal(integration.is_patched(), false, "the adapter is not marked as patched")
   end)
   _G.MiniStatusline = nil
 end)
