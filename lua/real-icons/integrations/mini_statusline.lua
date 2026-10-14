@@ -17,23 +17,54 @@ local function statusline_hl(hl)
   return "%#" .. hl .. "#"
 end
 
--- Component opts for special buffers that the plain guard rejects.
--- Oil resolves its browsed directory so themed folder icons apply;
--- fugitive views resolve the synthetic .git directory so the pack's git
--- folder icon applies. Returns nil when there is nothing special.
+-- Buffers that are not filenames: terminals, sidebars, prompts, unnamed
+-- buffers, and URIs. Shared by component() and section_fileinfo() so the
+-- guard cannot be bypassed through the filetype fallback.
+local function is_guarded_buffer()
+  local name = vim.api.nvim_buf_get_name(0)
+  return vim.bo.buftype ~= "" or name == "" or name:match("^%w[%w+.-]*://") ~= nil
+end
+
+-- Merged mini.statusline icon setting: buffer-local wins, default on.
+-- Fail open: an unreadable config keeps icons.
+local function icons_enabled()
+  local buffer_config = vim.b.ministatusline_config
+  if type(buffer_config) == "table" and buffer_config.use_icons ~= nil then
+    return buffer_config.use_icons and true or false
+  end
+  local ok, statusline = pcall(require, "mini.statusline")
+  if ok and type(statusline) == "table" and type(statusline.config) == "table" then
+    local use_icons = statusline.config.use_icons
+    if use_icons ~= nil then
+      return use_icons and true or false
+    end
+  end
+  return true
+end
+
+-- Explicit component opts for special buffers the guard rejects. Oil
+-- resolves its browsed directory so themed folder icons apply; fugitive
+-- views resolve the synthetic .git directory so the pack's git folder icon
+-- applies; other fugitive:// blobs resolve by their underlying filetype.
+-- Returns nil when there is nothing special to render.
 local function special_opts(filetype)
+  local name = vim.api.nvim_buf_get_name(0)
+  local scheme = name:match("^(%w[%w+.-]*)://")
   if filetype == "oil" then
-    local dir = vim.api.nvim_buf_get_name(0):match("^oil://(.*)$")
+    local dir = name:match("^oil://(.*)$")
     if dir ~= nil and dir ~= "" then
       return { path = dir, is_dir = true }
     end
     return nil
   end
-  if filetype == "fugitive" or filetype == "fugitiveblame" then
-    return { path = ".git", is_dir = true }
-  end
-  if filetype ~= "" then
-    return { filetype = filetype }
+  if scheme == "fugitive" then
+    if filetype == "fugitive" or filetype == "fugitiveblame" then
+      return { path = ".git", is_dir = true }
+    end
+    if filetype ~= "" then
+      return { filetype = filetype }
+    end
+    return nil
   end
   return nil
 end
@@ -51,11 +82,10 @@ end
 
 function M.component(opts)
   opts = opts or {}
-  -- Terminals, tree sidebars and picker prompts are not filenames. Explicit
-  -- paths/filetypes still allow callers to render a chosen file's icon.
-  if not opts.path and not opts.filetype then
-    local name = vim.api.nvim_buf_get_name(0)
-    if vim.bo.buftype ~= "" or name == "" or name:match("^%w[%w+.-]*://") then
+  -- Explicit paths/filetypes allow callers to render a chosen file's icon
+  -- and override both the guard and the use_icons setting below.
+  if opts.path == nil and opts.filetype == nil then
+    if is_guarded_buffer() or not icons_enabled() then
       return ""
     end
   end
@@ -76,12 +106,13 @@ function M.component(opts)
   return statusline_hl(segment.hl) .. segment.text .. statusline_hl(restore)
 end
 
-function M.section_fileinfo(args)
+function M.section_fileinfo(args, opts)
   args = args or {}
+  opts = opts or {}
   local filetype = vim.bo.filetype
-  local icon = M.component()
-  if icon == "" then
-    icon = M.component(special_opts(filetype))
+  local icon = ""
+  if icons_enabled() then
+    icon = M.component(vim.tbl_extend("force", special_opts(filetype) or {}, opts))
   end
   local label = filetype
   if icon ~= "" and label ~= "" then
@@ -108,8 +139,8 @@ local function patch(statusline)
   if type(statusline.section_fileinfo) ~= "function" then
     return false, "mini.statusline section_fileinfo API is not compatible"
   end
-  statusline.section_fileinfo = function(args)
-    return M.section_fileinfo(args)
+  statusline.section_fileinfo = function(...)
+    return M.section_fileinfo(...)
   end
   statusline._real_icons_patched = true
   return true
@@ -120,27 +151,22 @@ function M.setup()
   if not ok then
     return false, "mini.statusline is not available"
   end
-
-  -- Patch the live module table so default content picks up real icons
-  -- regardless of whether mini.statusline was configured before real-icons.
-  local patched_ok, patch_err = patch(statusline)
-  if not patched_ok then
-    return false, patch_err
+  -- Validate the required APIs before modifying the module so a
+  -- compatibility failure cannot leave a partial patch applied.
+  if type(statusline.section_fileinfo) ~= "function" then
+    return false, "mini.statusline section_fileinfo API is not compatible"
   end
-
-  if patched then
-    return true
-  end
-
-  local original_setup = statusline.setup
-  if type(original_setup) ~= "function" then
+  if type(statusline.setup) ~= "function" then
     return false, "mini.statusline setup API is not compatible"
   end
 
-  statusline.setup = function(user_config)
-    local result = original_setup(user_config)
-    patch(statusline)
-    return result
+  -- Patch the live module table so default content picks up real icons
+  -- regardless of whether mini.statusline was configured before real-icons.
+  -- Upstream setup() never replaces section_fileinfo, so no wrapper is
+  -- needed to survive re-configuration.
+  local patched_ok, patch_err = patch(statusline)
+  if not patched_ok then
+    return false, patch_err
   end
 
   patched = true
