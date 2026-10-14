@@ -747,6 +747,382 @@ test("lualine hides icons for special buffers and avoids duplicated padding", fu
   assert_true(ok, err)
 end)
 
+local function ministatusline_stub(overrides)
+  local stub = {
+    config = { use_icons = true },
+    is_truncated = function(trunc_width)
+      return vim.api.nvim_win_get_width(0) < (trunc_width or -1)
+    end,
+  }
+  local function filesize()
+    local size = math.max(vim.fn.line2byte(vim.fn.line("$") + 1) - 1, 0)
+    if size < 1024 then
+      return string.format("%dB", size)
+    elseif size < 1048576 then
+      return string.format("%.2fKiB", size / 1024)
+    else
+      return string.format("%.2fMiB", size / 1048576)
+    end
+  end
+  function stub.section_fileinfo(args)
+    local filetype = vim.bo.filetype
+    local use_icons = (vim.b.ministatusline_config or {}).use_icons
+    if use_icons == nil then
+      use_icons = stub.config.use_icons
+    end
+    if use_icons ~= false and filetype ~= "" then
+      filetype = "G " .. filetype
+    end
+    if stub.is_truncated(args.trunc_width) or vim.bo.buftype ~= "" then
+      return filetype
+    end
+    local encoding = vim.bo.fileencoding or vim.bo.encoding
+    return string.format(
+      "%s%s%s[%s] %s",
+      filetype,
+      filetype == "" and "" or " ",
+      encoding,
+      vim.bo.fileformat,
+      filesize()
+    )
+  end
+  function stub.setup(config)
+    _G.MiniStatusline = stub
+    stub.config = vim.tbl_deep_extend("force", stub.config, config or {})
+  end
+  if overrides then
+    for key, value in pairs(overrides) do
+      stub[key] = value
+    end
+  end
+  return stub
+end
+
+local function with_ministatusline_buffer(name, filetype, buftype, callback)
+  local previous = vim.api.nvim_get_current_buf()
+  local buf = vim.api.nvim_create_buf(true, false)
+  if name then
+    vim.api.nvim_buf_set_name(buf, name)
+  end
+  vim.api.nvim_set_current_buf(buf)
+  if buftype == "terminal" then
+    vim.api.nvim_open_term(buf, {})
+  elseif buftype then
+    vim.bo[buf].buftype = buftype
+  end
+  if filetype then
+    vim.bo[buf].filetype = filetype
+  end
+  local ok, err = xpcall(callback, debug.traceback)
+  vim.api.nvim_set_current_buf(previous)
+  vim.api.nvim_buf_delete(buf, { force = true })
+  assert_true(ok, err)
+end
+
+local function strip_ministatusline_icon(value)
+  return value:gsub("^%%#[^#]*#.-%%#[^#]*# ", ""):gsub("^G ", "")
+end
+
+test("mini.statusline respects the global use_icons setting", function()
+  _G.MiniStatusline = nil
+  local stub = ministatusline_stub()
+  with_modules({
+    ["mini.statusline"] = stub,
+  }, {
+    "real-icons.integrations.mini_statusline",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local original = stub.section_fileinfo
+    local integration = require("real-icons.integrations.mini_statusline")
+    assert_true(integration.setup())
+    stub.setup({ use_icons = false })
+    assert_true(vim.deep_equal(stub.config, { use_icons = false }), "host icon setting is not mutated")
+    with_ministatusline_buffer("/tmp/real-icons-ministatusline.lua", "lua", nil, function()
+      assert_equal(
+        stub.section_fileinfo({ trunc_width = 40 }),
+        original({ trunc_width = 40 }),
+        "disabled icons keep the original fileinfo text"
+      )
+    end)
+  end)
+  _G.MiniStatusline = nil
+end)
+
+test("mini.statusline respects the buffer-local use_icons setting", function()
+  _G.MiniStatusline = nil
+  local stub = ministatusline_stub()
+  with_modules({
+    ["mini.statusline"] = stub,
+  }, {
+    "real-icons.integrations.mini_statusline",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local original = stub.section_fileinfo
+    local integration = require("real-icons.integrations.mini_statusline")
+    assert_true(integration.setup())
+    with_ministatusline_buffer("/tmp/real-icons-ministatusline-local.lua", "lua", nil, function()
+      vim.b.ministatusline_config = { use_icons = false }
+      assert_equal(
+        stub.section_fileinfo({ trunc_width = 40 }),
+        original({ trunc_width = 40 }),
+        "buffer-local opt-out keeps the original fileinfo text"
+      )
+      assert_equal(
+        strip_ministatusline_icon(stub.section_fileinfo({ trunc_width = 40 })),
+        "lua [unix] 0B",
+        "buffer-local opt-out keeps full fileinfo text"
+      )
+    end)
+  end)
+  _G.MiniStatusline = nil
+end)
+
+test("mini.statusline renders file icons with default settings", function()
+  _G.MiniStatusline = nil
+  local stub = ministatusline_stub()
+  with_modules({
+    ["mini.statusline"] = stub,
+  }, {
+    "real-icons.integrations.mini_statusline",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local original = stub.section_fileinfo
+    local integration = require("real-icons.integrations.mini_statusline")
+    assert_true(integration.setup())
+    with_ministatusline_buffer("/tmp/real-icons-ministatusline-full.lua", "lua", nil, function()
+      local rendered = stub.section_fileinfo({ trunc_width = 40 })
+      assert_true(rendered:sub(1, 2) == "%#", "icon highlight opens the section")
+      assert_true(rendered:find("%*", 1, true) == nil, "no highlight reset leaks into fileinfo text")
+      assert_true(
+        rendered:find("%#MiniStatuslineFileinfo# lua", 1, true) ~= nil,
+        "fileinfo group is restored before the label"
+      )
+      assert_equal(
+        strip_ministatusline_icon(rendered),
+        strip_ministatusline_icon(original({ trunc_width = 40 })),
+        "non-icon fileinfo text is preserved"
+      )
+    end)
+  end)
+  _G.MiniStatusline = nil
+end)
+
+test("mini.statusline guards special buffers without filetype fallback", function()
+  _G.MiniStatusline = nil
+  local stub = ministatusline_stub()
+  with_modules({
+    ["mini.statusline"] = stub,
+  }, {
+    "real-icons.integrations.mini_statusline",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local original = stub.section_fileinfo
+    local integration = require("real-icons.integrations.mini_statusline")
+    assert_true(integration.setup())
+    local cases = {
+      { buftype = "nofile", filetype = "TelescopePrompt" },
+      { buftype = "nofile", filetype = "NvimTree" },
+      { buftype = "terminal", filetype = "" },
+      { buftype = "", filetype = "" },
+    }
+    for index, case in ipairs(cases) do
+      with_ministatusline_buffer(nil, case.filetype ~= "" and case.filetype or nil, case.buftype ~= "" and case.buftype or nil, function()
+        assert_equal(integration.component(), "", "guarded buffer has no icon (" .. index .. ")")
+        local rendered = stub.section_fileinfo({ trunc_width = 40 })
+        assert_true(rendered:find("%#", 1, true) == nil, "guarded buffer has no icon codes (" .. index .. ")")
+        if case.filetype ~= "" then
+          assert_true(
+            rendered:find(case.filetype, 1, true) ~= nil,
+            "guarded buffer keeps its label (" .. index .. ")"
+          )
+        end
+      end)
+    end
+  end)
+  _G.MiniStatusline = nil
+end)
+
+test("mini.statusline renders explicit oil and fugitive icons", function()
+  _G.MiniStatusline = nil
+  local stub = ministatusline_stub()
+  with_modules({
+    ["mini.statusline"] = stub,
+  }, {
+    "real-icons.integrations.mini_statusline",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local original = stub.section_fileinfo
+    local integration = require("real-icons.integrations.mini_statusline")
+    assert_true(integration.setup())
+    local cases = {
+      { name = "oil:///tmp", filetype = "oil", buftype = "acwrite" },
+      { name = "fugitive:///tmp/.git//", filetype = "fugitive", buftype = "nowrite" },
+      { name = "/tmp/real-icons-ministatusline.fugitiveblame", filetype = "fugitiveblame", buftype = "nowrite" },
+      { name = "/tmp/real-icons-ministatusline/.git/index", filetype = "fugitive", buftype = "nowrite" },
+      { name = "fugitive:///tmp/.git//0/init.lua", filetype = "lua", buftype = "" },
+    }
+    for _, case in ipairs(cases) do
+      with_ministatusline_buffer(case.name, case.filetype, case.buftype, function()
+        local rendered = stub.section_fileinfo({ trunc_width = 40 })
+        assert_true(rendered:sub(1, 2) == "%#", case.filetype .. " renders an icon")
+        assert_true(rendered:find(case.filetype, 1, true) ~= nil, case.filetype .. " keeps its label")
+        assert_true(rendered ~= original({ trunc_width = 40 }), case.filetype .. " replaces the native icon")
+        if case.filetype == "fugitive" or case.filetype == "fugitiveblame" then
+          local expected = integration.component({ path = ".git", is_dir = true })
+          assert_equal(rendered, expected .. " " .. case.filetype, "Fugitive views use the git folder icon")
+        end
+        vim.b.ministatusline_config = { use_icons = false }
+        assert_equal(
+          stub.section_fileinfo({ trunc_width = 40 }),
+          original({ trunc_width = 40 }),
+          case.filetype .. " respects the host icon setting"
+        )
+      end)
+    end
+    with_ministatusline_buffer(nil, "oil", "acwrite", function()
+      local rendered = stub.section_fileinfo({ trunc_width = 40 })
+      assert_true(rendered:find("%#", 1, true) == nil, "oil without a directory has no icon")
+      assert_true(rendered:find("oil", 1, true) ~= nil, "oil without a directory keeps its label")
+    end)
+  end)
+  _G.MiniStatusline = nil
+end)
+
+test("mini.statusline restores custom highlight groups", function()
+  _G.MiniStatusline = nil
+  local stub = ministatusline_stub()
+  with_modules({
+    ["mini.statusline"] = stub,
+  }, {
+    "real-icons.integrations.mini_statusline",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local integration = require("real-icons.integrations.mini_statusline")
+    assert_true(integration.setup())
+    with_ministatusline_buffer("/tmp/real-icons-ministatusline-hl.lua", "lua", nil, function()
+      local rendered = stub.section_fileinfo({}, { restore_hl = "MiniStatuslineModeNormal" })
+      assert_true(
+        rendered:find("%#MiniStatuslineModeNormal# lua", 1, true) ~= nil,
+        "custom group is restored after the icon"
+      )
+      local component = integration.component({ path = "/tmp/real-icons-ministatusline-hl.lua" })
+      assert_true(
+        component:sub(-#"%#MiniStatuslineFileinfo#") == "%#MiniStatuslineFileinfo#",
+        "standalone component restores the fileinfo group by default"
+      )
+    end)
+  end)
+  _G.MiniStatusline = nil
+end)
+
+test("mini.statusline truncates fileinfo while preserving text", function()
+  _G.MiniStatusline = nil
+  local stub = ministatusline_stub()
+  with_modules({
+    ["mini.statusline"] = stub,
+  }, {
+    "real-icons.integrations.mini_statusline",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local original = stub.section_fileinfo
+    local integration = require("real-icons.integrations.mini_statusline")
+    assert_true(integration.setup())
+    with_ministatusline_buffer("/tmp/real-icons-ministatusline-trunc.lua", "lua", nil, function()
+      local rendered = stub.section_fileinfo({ trunc_width = 200 })
+      assert_equal(
+        strip_ministatusline_icon(rendered),
+        strip_ministatusline_icon(original({ trunc_width = 200 })),
+        "truncated fileinfo text is preserved"
+      )
+    end)
+  end)
+  _G.MiniStatusline = nil
+end)
+
+test("mini.statusline setup works in both orders and on repetition", function()
+  for _, order in ipairs({ "host-first", "adapter-first" }) do
+    _G.MiniStatusline = nil
+    local stub = ministatusline_stub()
+    with_modules({
+      ["mini.statusline"] = stub,
+    }, {
+      "real-icons.integrations.mini_statusline",
+    }, function()
+      require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+      local integration = require("real-icons.integrations.mini_statusline")
+      if order == "host-first" then
+        stub.setup()
+        assert_true(integration.setup())
+      else
+        assert_true(integration.setup())
+        stub.setup()
+      end
+      assert_true(integration.setup(), "repeated adapter setup (" .. order .. ")")
+      stub.setup()
+      with_ministatusline_buffer("/tmp/real-icons-ministatusline-order.lua", "lua", nil, function()
+        local rendered = stub.section_fileinfo({ trunc_width = 40 })
+        assert_true(rendered:sub(1, 2) == "%#", "icon renders (" .. order .. ")")
+        assert_true(stub._real_icons_patched, "patch flag is set (" .. order .. ")")
+      end)
+    end)
+  end
+  _G.MiniStatusline = nil
+end)
+
+test("mini.statusline validates APIs before patching", function()
+  _G.MiniStatusline = nil
+  with_modules({
+    ["mini.statusline"] = { setup = function() end },
+  }, {
+    "real-icons.integrations.mini_statusline",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local host = require("mini.statusline")
+    local integration = require("real-icons.integrations.mini_statusline")
+    local ok, err = integration.setup()
+    assert_true(ok == false, "incompatible host is rejected")
+    assert_true(err ~= nil, "rejection explains itself")
+    assert_true(host._real_icons_patched == nil, "no partial patch is applied")
+  end)
+  _G.MiniStatusline = nil
+  local incompatible = ministatusline_stub()
+  incompatible.section_fileinfo = nil
+  incompatible.setup = nil
+  with_modules({
+    ["mini.statusline"] = incompatible,
+  }, {
+    "real-icons.integrations.mini_statusline",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local integration = require("real-icons.integrations.mini_statusline")
+    local ok = integration.setup()
+    assert_true(ok == false, "missing host APIs are rejected")
+  end)
+  _G.MiniStatusline = nil
+end)
+
+test("mini.statusline leaves the host unchanged when setup is missing", function()
+  _G.MiniStatusline = nil
+  local host = ministatusline_stub()
+  host.setup = nil
+  local original = host.section_fileinfo
+  with_modules({
+    ["mini.statusline"] = host,
+  }, {
+    "real-icons.integrations.mini_statusline",
+  }, function()
+    require("real-icons").setup({ pack = "builtin", backend = "disabled" })
+    local integration = require("real-icons.integrations.mini_statusline")
+    local ok, err = integration.setup()
+    assert_equal(ok, false, "missing setup API is rejected")
+    assert_true(err:find("setup API", 1, true) ~= nil, "the missing API is identified")
+    assert_equal(host.section_fileinfo, original, "the original section is not replaced")
+    assert_equal(host._real_icons_patched, nil, "the host is not marked as patched")
+    assert_equal(integration.is_patched(), false, "the adapter is not marked as patched")
+  end)
+  _G.MiniStatusline = nil
+end)
+
 test("neo-tree integration uses the official icon provider", function()
   local defaults = {
     default_component_configs = {

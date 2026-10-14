@@ -5,6 +5,7 @@ M.labels = {
   fzf_lua = "fzf-lua",
   lualine = "Lualine",
   mini_files = "mini.files",
+  mini_statusline = "mini.statusline",
   neo_tree = "Neo-tree",
   nvim_tree = "nvim-tree",
   oil = "Oil",
